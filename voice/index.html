@@ -173,6 +173,14 @@
     <b>Chrome</b> or <b>Edge</b> on desktop or Android for it to work.
   </div>
 
+  <div id="frameWarning" class="unsupported" style="display:none;">
+    This page looks like it's loaded inside an embedded preview (e.g. Claude's artifact panel),
+    which often blocks microphone access. If "Start listening" doesn't actually transcribe anything,
+    download this as an .html file and double-click it to open it directly in Chrome — it'll work there.
+  </div>
+
+  <div id="errorBox" class="unsupported" style="display:none;"></div>
+
   <div class="transport">
     <div id="recLight" class="rec-light"></div>
     <div id="statusText" class="status-text">idle</div>
@@ -218,8 +226,28 @@
   const wordCountEl = document.getElementById('wordCount');
   const charCountEl = document.getElementById('charCount');
   const unsupportedBox = document.getElementById('unsupportedBox');
+  const frameWarning = document.getElementById('frameWarning');
+  const errorBox = document.getElementById('errorBox');
   const meterCanvas = document.getElementById('meter');
   const meterCtx = meterCanvas.getContext('2d');
+
+  function showError(msg){
+    errorBox.textContent = msg;
+    errorBox.style.display = 'block';
+  }
+  function clearError(){
+    errorBox.style.display = 'none';
+    errorBox.textContent = '';
+  }
+
+  // Warn proactively if we're sitting inside someone else's iframe (e.g. a chat preview pane)
+  try{
+    if(window.self !== window.top){
+      frameWarning.style.display = 'block';
+    }
+  }catch(e){
+    frameWarning.style.display = 'block'; // cross-origin access throws -> definitely framed
+  }
 
   let listening = false;
   let finalText = '';     // committed, punctuated transcript
@@ -303,6 +331,7 @@
     recognition.interimResults = true;
 
     recognition.onresult = (event) => {
+      clearError();
       let interim = '';
       for(let i = event.resultIndex; i < event.results.length; i++){
         const res = event.results[i];
@@ -321,17 +350,25 @@
     };
 
     recognition.onerror = (e) => {
-      if(e.error === 'no-speech' || e.error === 'audio-capture'){
-        return; // transient, recognition keeps/retries
+      if(e.error === 'no-speech'){
+        return; // transient, just means silence — recognition keeps/retries
       }
+      // Anything else means it can't actually capture/transcribe audio.
+      listening = false;
+      shouldRestart = false;
+      toggleBtn.textContent = 'Start listening';
+      toggleBtn.classList.remove('stop');
+      stopMeter();
+      let msg = 'Error: ' + e.error + '.';
       if(e.error === 'not-allowed' || e.error === 'service-not-allowed'){
-        setStatus('mic blocked', false);
-        listening = false;
-        shouldRestart = false;
-        toggleBtn.textContent = 'Start listening';
-        toggleBtn.classList.remove('stop');
-        stopMeter();
+        msg = 'Microphone access was blocked. Allow the mic permission for this page (check the icon in the address bar), then press Start again.';
+      } else if(e.error === 'audio-capture'){
+        msg = 'No microphone could be reached. If you\'re viewing this inside Claude\'s artifact preview, it may be sandboxed — open the downloaded HTML file directly in Chrome instead.';
+      } else if(e.error === 'network'){
+        msg = 'Network error reaching the speech recognition service. Check your internet connection and try again.';
       }
+      showError(msg);
+      setStatus('error', false);
     };
 
     recognition.onend = () => {
@@ -346,7 +383,24 @@
     };
   }
 
-  function startListening(){
+  async function startListening(){
+    clearError();
+    toggleBtn.disabled = true;
+    toggleBtn.textContent = 'Requesting mic…';
+    try{
+      // Explicitly probe mic access first — this is what actually reveals
+      // permission/sandbox failures, rather than letting them hide inside
+      // the speech engine's internal capture.
+      const probe = await navigator.mediaDevices.getUserMedia({audio:true});
+      probe.getTracks().forEach(t => t.stop());
+    }catch(err){
+      toggleBtn.disabled = false;
+      toggleBtn.textContent = 'Start listening';
+      showError('Couldn\'t access the microphone (' + err.name + '). If this page is embedded in a preview panel, download it and open the .html file directly in Chrome instead.');
+      setStatus('mic blocked', false);
+      return;
+    }
+    toggleBtn.disabled = false;
     listening = true;
     shouldRestart = true;
     try{ recognition.start(); } catch(e){}
@@ -417,6 +471,7 @@
   resizeCanvas();
 
   async function startMeter(){
+    if(audioCtx && audioCtx.state !== 'closed') return; // already running
     try{
       stream = await navigator.mediaDevices.getUserMedia({audio:true});
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -453,9 +508,13 @@
 
   function stopMeter(){
     if(rafId) cancelAnimationFrame(rafId);
-    if(source) try{ source.disconnect(); }catch(e){}
-    if(audioCtx) try{ audioCtx.close(); }catch(e){}
-    if(stream) stream.getTracks().forEach(t => t.stop());
+    rafId = null;
+    if(source){ try{ source.disconnect(); }catch(e){} source = null; }
+    if(audioCtx && audioCtx.state !== 'closed'){
+      audioCtx.close().catch(()=>{});
+    }
+    audioCtx = null;
+    if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
     meterCtx.clearRect(0,0,meterCanvas.width, meterCanvas.height);
     analyser = null;
   }
