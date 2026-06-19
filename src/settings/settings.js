@@ -1,5 +1,8 @@
 const { invoke } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
+import { pipeline, env } from '../overlay/transformers.min.js';
+env.allowLocalModels = false;
+env.useBrowserCache = true;
 
 // Navigation
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -33,16 +36,18 @@ if (downloadBtn) {
       downloadBtn.innerText = "Downloading Model... (Please wait)";
       statusText.style.display = 'block';
       statusText.style.color = '#eab308';
-      statusText.innerText = "Downloading and extracting Vosk Native Engine...";
+      statusText.innerText = "Downloading Whisper Model (~40MB)... This may take a few seconds depending on your internet connection.";
       
-      const res = await invoke('download_vosk_model');
+      // Load and cache the whisper model in IndexedDB
+      await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
       
       statusText.style.color = '#4ade80';
-      statusText.innerText = res;
-      downloadBtn.innerText = "Engine Installed ✅";
+      statusText.innerText = "Whisper Model Downloaded successfully! Voice commands are now available offline.";
+      downloadBtn.innerText = "Model Downloaded ✅";
     } catch (err) {
+      statusText.style.display = 'block';
       statusText.style.color = '#ef4444';
-      statusText.innerText = "Error: " + err;
+      statusText.innerText = "Error downloading model: " + err;
       downloadBtn.disabled = false;
       downloadBtn.innerText = "Retry Download";
     }

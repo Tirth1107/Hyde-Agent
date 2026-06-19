@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::PathBuf;
 
 #[tauri::command]
 pub async fn download_vosk_model() -> Result<String, String> {

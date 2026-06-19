@@ -1,3 +1,7 @@
+import { pipeline, env } from './transformers.min.js';
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { getCurrentWindow } = window.__TAURI__.window;
@@ -76,8 +80,12 @@ modeChatBtn.addEventListener('click', () => {
     chatView.classList.remove('hidden');
     voiceView.classList.remove('active');
     voiceView.classList.add('hidden');
-    if (shouldListenContinuously) {
-        shouldListenContinuously = false;
+    if (isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        micBtn.innerHTML = '🎙️';
+        voiceCenter.classList.remove('listening');
     }
 });
 
@@ -91,20 +99,12 @@ modeVoiceBtn.addEventListener('click', () => {
     chatView.classList.add('hidden');
     
     // Auto-start native voice recognition
-    shouldListenContinuously = true;
-    listenLoop();
+    startRecording();
 });
 
 voiceCenter.addEventListener('click', () => {
     if (currentMode !== 'voice') return;
-    
-    if (isRecording || shouldListenContinuously) {
-        shouldListenContinuously = false;
-        voiceStatus.innerText = "Paused. Tap to listen.";
-    } else {
-        shouldListenContinuously = true;
-        listenLoop();
-    }
+    if (!isRecording) startRecording();
 });
 
 sendBtn.addEventListener('click', () => {
@@ -150,58 +150,116 @@ input.addEventListener('input', async (e) => {
     }
 });
 
+let transcriber = null;
 let isRecording = false;
-let shouldListenContinuously = false;
+let mediaRecorder = null;
+let audioChunks = [];
 
-async function listenLoop() {
-    if (!shouldListenContinuously) return;
-    isRecording = true;
-    micBtn.classList.add('recording');
-    micBtn.innerHTML = '🔴';
-    
+async function loadWhisper() {
+    if (transcriber) return;
+    voiceStatus.innerText = "Loading Offline Voice Model (first time only)...";
+    try {
+        transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
+        voiceStatus.innerText = "Tap to start listening...";
+    } catch (e) {
+        voiceStatus.innerText = "Error loading model. Check console.";
+        console.error(e);
+    }
+}
+
+async function startRecording() {
+    await loadWhisper();
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = e => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+        };
+        
+        mediaRecorder.onstop = async () => {
+            const mimeType = audioChunks.length > 0 ? audioChunks[0].type : 'audio/webm';
+            const audioBlob = new Blob(audioChunks, { type: mimeType });
+            await processAudio(audioBlob);
+            stream.getTracks().forEach(track => track.stop());
+        };
+        
+        mediaRecorder.start(250); // 250ms chunks to prevent missing duration bugs
+        isRecording = true;
+        micBtn.classList.add('recording');
+        micBtn.innerHTML = '🔴';
+        if (currentMode === 'voice') {
+            voiceCenter.classList.add('listening');
+            voiceStatus.innerText = "Listening... Tap to stop and process.";
+        }
+    } catch (err) {
+        console.error("Mic access error:", err);
+        voiceStatus.innerText = "Microphone access denied. Check Windows Privacy Settings.";
+    }
+}
+
+async function processAudio(blob) {
     if (currentMode === 'voice') {
-        voiceCenter.classList.add('listening');
-        voiceStatus.innerText = "Listening...";
+        voiceStatus.innerText = "Processing...";
     }
     
     try {
-        const text = await invoke('start_native_listening');
+        // Decode Blob to Float32Array
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        const audioData = audioBuffer.getChannelData(0);
+        
+        if (currentMode === 'voice') {
+            voiceStatus.innerText = `Processing ${audioBuffer.duration.toFixed(1)}s audio...`;
+        }
+
+        const output = await transcriber(audioData, {
+            language: 'english',
+            task: 'transcribe'
+        });
+        let text = output.text.trim();
+        
+        // Filter out common hallucinations if audio is mostly silence
+        const lowerText = text.toLowerCase().replace(/[^a-z]/g, '');
+        if (lowerText === 'you' || lowerText === 'thankyou' || lowerText === 'thanksforwatching') {
+            text = '';
+        }
+        
         if (text) {
             input.value = text;
             if (currentMode === 'voice') {
                 voiceTranscript.innerText = text;
-                voiceStatus.innerText = "Processing...";
             }
             await handleCommand(text);
             if (currentMode === 'voice') {
-                if (shouldListenContinuously) voiceStatus.innerText = "Listening...";
-                voiceTranscript.innerText = "";
+                setTimeout(() => {
+                    voiceTranscript.innerText = "";
+                }, 3000);
             }
         }
-    } catch (e) {
-        console.error("Native voice error:", e);
+    } catch(err) {
+        console.error("Whisper decoding error:", err);
+        if (currentMode === 'voice') voiceStatus.innerText = "Error decoding audio.";
     }
     
-    isRecording = false;
-    micBtn.classList.remove('recording');
-    micBtn.innerHTML = '🎙️';
-    voiceCenter.classList.remove('listening');
-    
-    if (shouldListenContinuously) {
-        setTimeout(listenLoop, 100);
-    } else {
-        if (currentMode === 'voice') {
-             voiceStatus.innerText = "Tap to start listening...";
-        }
+    if (currentMode === 'voice') {
+        setTimeout(() => {
+            if (!isRecording) voiceStatus.innerText = "Tap to start listening...";
+        }, 1500);
     }
 }
 
 micBtn.addEventListener('click', () => {
-    if (isRecording || shouldListenContinuously) {
-        shouldListenContinuously = false;
+    if (isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        micBtn.innerHTML = '🎙️';
+        voiceCenter.classList.remove('listening');
     } else {
-        shouldListenContinuously = true;
-        listenLoop();
+        startRecording();
     }
 });
 

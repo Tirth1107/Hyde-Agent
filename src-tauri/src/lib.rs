@@ -78,29 +78,51 @@ fn get_suggestions(query: String) -> Vec<String> {
 }
 
 #[tauri::command]
-async fn start_native_listening() -> Result<String, String> {
-    let script = r#"
-        Add-Type -AssemblyName System.Speech
-        $recognizer = New-Object System.Speech.Recognition.SpeechRecognitionEngine
-        $recognizer.SetInputToDefaultAudioDevice()
-        $grammar = New-Object System.Speech.Recognition.DictationGrammar
-        $recognizer.LoadGrammar($grammar)
-        $result = $recognizer.Recognize()
-        if ($result -ne $null) { Write-Host $result.Text }
-    "#;
+async fn start_native_listening(app: tauri::AppHandle) -> Result<String, String> {
     use std::os::windows::process::CommandExt;
-    let output = std::process::Command::new("powershell")
-        .creation_flags(0x08000000)
-        .arg("-Command")
-        .arg(script)
-        .output()
+    use std::process::{Command, Stdio};
+    use std::io::{BufRead, BufReader};
+    use tauri::Emitter;
+
+    let mut child = Command::new("python")
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        .arg("-u")
+        .arg("listen_once.py")
+        .stdout(Stdio::piped())
+        .spawn()
         .map_err(|e| e.to_string())?;
 
-    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if text.is_empty() {
+    let stdout = child.stdout.take().unwrap();
+    let reader = BufReader::new(stdout);
+    
+    let mut final_text = String::new();
+
+    for line in reader.lines() {
+        if let Ok(line) = line {
+            let line = line.trim();
+            if line == "READY" {
+                app.emit("voice-state", "READY").unwrap_or(());
+            } else if line == "SPEAKING" {
+                app.emit("voice-state", "SPEAKING").unwrap_or(());
+            } else if line == "TIMEOUT" {
+                app.emit("voice-state", "TIMEOUT").unwrap_or(());
+                break;
+            } else if line == "ERROR" {
+                app.emit("voice-state", "ERROR").unwrap_or(());
+                break;
+            } else if line.starts_with("TEXT:") {
+                final_text = line.trim_start_matches("TEXT:").to_string();
+                break;
+            }
+        }
+    }
+    
+    let _ = child.wait();
+
+    if final_text.is_empty() {
         Err("No speech detected".to_string())
     } else {
-        Ok(text)
+        Ok(final_text)
     }
 }
 

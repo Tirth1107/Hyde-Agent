@@ -13,15 +13,15 @@
         "label": "overlay",
         "title": "Hyde Agent",
         "url": "overlay/index.html",
-        "width": 600,
-        "height": 400,
-        "transparent": true,
-        "decorations": false,
+        "width": 800,
+        "height": 650,
+        "transparent": false,
+        "decorations": true,
         "visible": true,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "center": true,
-        "resizable": false,
-        "skipTaskbar": true
+        "resizable": true,
+        "skipTaskbar": false
       },
       {
         "label": "settings",

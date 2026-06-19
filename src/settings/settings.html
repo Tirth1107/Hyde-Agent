@@ -59,14 +59,14 @@
         <div class="setting-group">
           <label class="checkbox-label">
             <input type="checkbox" id="voice-enable">
-            Enable Voice Input (Vosk Offline STT)
+            Enable Voice Input (Whisper WASM Offline STT)
           </label>
           <p class="help-text">Requires a downloaded language model.</p>
         </div>
         <div class="setting-group">
-          <label>Native Voice Setup</label>
-          <p class="help-text">Windows WebView2 does not support voice recognition. Click below to automatically download and install the offline Vosk Engine to enable voice commands.</p>
-          <button id="download-vosk-btn" class="primary-btn" style="margin-top: 10px;">Download Native Vosk Engine</button>
+          <label>Enable Voice Input (Whisper WASM Offline STT)</label>
+          <p class="help-text">Windows WebView2 does not support voice recognition. Click below to download the offline Whisper model (~40MB) into your browser cache to enable lightning-fast local voice commands.</p>
+          <button id="download-vosk-btn" class="primary-btn" style="margin-top: 10px;">Download Offline Whisper Model</button>
           <p id="vosk-status-text" class="help-text" style="color: #4ade80; margin-top: 10px; display: none;"></p>
         </div>
       </section>
