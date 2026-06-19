@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hyde Agent Settings</title>
+  <link rel="stylesheet" href="settings.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="settings-layout">
+    <aside class="sidebar">
+      <h2>Hyde Agent</h2>
+      <nav>
+        <a href="#" class="nav-item active" data-target="general">General</a>
+        <a href="#" class="nav-item" data-target="commands">Built-in Commands</a>
+        <a href="#" class="nav-item" data-target="custom">Custom Commands</a>
+        <a href="#" class="nav-item" data-target="voice">Voice Settings</a>
+        <a href="#" class="nav-item" data-target="about">About</a>
+      </nav>
+    </aside>
+    
+    <main class="content">
+      <section id="general" class="active">
+        <h3>General Settings</h3>
+        <div class="setting-group">
+          <label>Theme</label>
+          <select id="theme-select">
+            <option value="system">System Default</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label>Global Hotkey</label>
+          <input type="text" id="hotkey-input" value="Alt+Space" readonly>
+        </div>
+      </section>
+
+      <section id="commands">
+        <h3>Built-in Commands</h3>
+        <p class="desc">These commands are always available.</p>
+        <div class="commands-list" id="builtin-list">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <section id="custom">
+        <h3>Custom Commands</h3>
+        <p class="desc">Define your own commands to open URLs, apps, or files.</p>
+        <button id="add-custom-btn" class="primary-btn">+ Add Command</button>
+        <div class="commands-list" id="custom-list">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <section id="voice">
+        <h3>Voice Settings</h3>
+        <div class="setting-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="voice-enable">
+            Enable Voice Input (Vosk Offline STT)
+          </label>
+          <p class="help-text">Requires a downloaded language model.</p>
+        </div>
+        <div class="setting-group">
+          <label>Native Voice Setup</label>
+          <p class="help-text">Windows WebView2 does not support voice recognition. Click below to automatically download and install the offline Vosk Engine to enable voice commands.</p>
+          <button id="download-vosk-btn" class="primary-btn" style="margin-top: 10px;">Download Native Vosk Engine</button>
+          <p id="vosk-status-text" class="help-text" style="color: #4ade80; margin-top: 10px; display: none;"></p>
+        </div>
+      </section>
+
+      <section id="about">
+        <h3>About Hyde Agent</h3>
+        <p>Version 1.0.0</p>
+        <p>A fast, offline command agent.</p>
+        <button class="secondary-btn" id="open-logs-btn">Open Logs Folder</button>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="settings.js"></script>
+</body>
+</html>

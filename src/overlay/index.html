@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hyde Agent</title>
+  <link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+  <div class="glass-container">
+    <div class="header">
+      <div class="logo">✨ Hyde Agent</div>
+      <div class="mode-toggle">
+        <button id="mode-chat" class="active">💬 Chat</button>
+        <button id="mode-voice">🎙️ Voice</button>
+      </div>
+      <div class="controls">
+        <button id="settings-btn" title="Settings">⚙️</button>
+        <button id="close-btn" title="Close">✕</button>
+      </div>
+    </div>
+    
+    <div id="chat-view" class="view-container active">
+      <div id="chat-history" class="chat-history">
+        <div class="message system-msg">
+          <div class="avatar">AI</div>
+          <div class="bubble">Hello! I'm Hyde. What can I do for you?</div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <input type="text" id="command-input" placeholder="Type a command or ask to open something..." autocomplete="off">
+        <button id="mic-btn" title="Voice Command (Hold or Click)">🎙️</button>
+        <button id="send-btn" title="Send">➤</button>
+      </div>
+      <div id="suggestions" class="suggestions-dropdown hidden"></div>
+    </div>
+
+    <div id="voice-view" class="view-container hidden">
+      <div class="voice-center">
+        <div class="orb-container">
+          <div class="orb"></div>
+          <div class="orb-ring"></div>
+        </div>
+        <div id="voice-status" class="voice-status">Tap to start listening...</div>
+        <div id="voice-transcript" class="voice-transcript"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="overlay.js"></script>
+</body>
+</html>
