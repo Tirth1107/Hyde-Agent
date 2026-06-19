@@ -83,23 +83,45 @@ async fn start_native_listening(app: tauri::AppHandle) -> Result<String, String>
     use std::process::{Command, Stdio};
     use std::io::{BufRead, BufReader};
     use tauri::Emitter;
+    use std::path::Path;
+
+    let py_script = if Path::new("src-tauri/listen_once.py").exists() {
+        "src-tauri/listen_once.py"
+    } else if Path::new("listen_once.py").exists() {
+        "listen_once.py"
+    } else {
+        return Err("listen_once.py not found".to_string());
+    };
 
     let mut child = Command::new("python")
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .arg("-u")
-        .arg("listen_once.py")
+        .arg(py_script)
         .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to spawn python: {}", e))?;
 
     let stdout = child.stdout.take().unwrap();
-    let reader = BufReader::new(stdout);
+    let stderr = child.stderr.take().unwrap();
     
+    // Spawn a thread to read stderr so it doesn't block and we can log it
+    std::thread::spawn(move || {
+        let err_reader = BufReader::new(stderr);
+        for line in err_reader.lines() {
+            if let Ok(line) = line {
+                eprintln!("PYTHON ERROR: {}", line);
+            }
+        }
+    });
+
+    let reader = BufReader::new(stdout);
     let mut final_text = String::new();
 
     for line in reader.lines() {
         if let Ok(line) = line {
             let line = line.trim();
+            println!("PYTHON OUT: {}", line);
             if line == "READY" {
                 app.emit("voice-state", "READY").unwrap_or(());
             } else if line == "SPEAKING" {
@@ -117,10 +139,12 @@ async fn start_native_listening(app: tauri::AppHandle) -> Result<String, String>
         }
     }
     
+    // forcefully kill the child process if it's still running
+    let _ = child.kill();
     let _ = child.wait();
 
     if final_text.is_empty() {
-        Err("No speech detected".to_string())
+        Err("TIMEOUT".to_string())
     } else {
         Ok(final_text)
     }

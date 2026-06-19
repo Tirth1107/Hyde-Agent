@@ -1,6 +1,3 @@
-import { pipeline, env } from './transformers.min.js';
-env.allowLocalModels = false;
-env.useBrowserCache = true;
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -81,7 +78,6 @@ modeChatBtn.addEventListener('click', () => {
     voiceView.classList.remove('active');
     voiceView.classList.add('hidden');
     if (isRecording) {
-        mediaRecorder.stop();
         isRecording = false;
         micBtn.classList.remove('recording');
         micBtn.innerHTML = '🎙️';
@@ -150,83 +146,20 @@ input.addEventListener('input', async (e) => {
     }
 });
 
-let transcriber = null;
 let isRecording = false;
-let mediaRecorder = null;
-let audioChunks = [];
-
-async function loadWhisper() {
-    if (transcriber) return;
-    voiceStatus.innerText = "Loading Offline Voice Model (first time only)...";
-    try {
-        transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
-        voiceStatus.innerText = "Tap to start listening...";
-    } catch (e) {
-        voiceStatus.innerText = "Error loading model. Check console.";
-        console.error(e);
-    }
-}
 
 async function startRecording() {
-    await loadWhisper();
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-        
-        mediaRecorder.ondataavailable = e => {
-            if (e.data.size > 0) audioChunks.push(e.data);
-        };
-        
-        mediaRecorder.onstop = async () => {
-            const mimeType = audioChunks.length > 0 ? audioChunks[0].type : 'audio/webm';
-            const audioBlob = new Blob(audioChunks, { type: mimeType });
-            await processAudio(audioBlob);
-            stream.getTracks().forEach(track => track.stop());
-        };
-        
-        mediaRecorder.start(250); // 250ms chunks to prevent missing duration bugs
-        isRecording = true;
-        micBtn.classList.add('recording');
-        micBtn.innerHTML = '🔴';
-        if (currentMode === 'voice') {
-            voiceCenter.classList.add('listening');
-            voiceStatus.innerText = "Listening... Tap to stop and process.";
-        }
-    } catch (err) {
-        console.error("Mic access error:", err);
-        voiceStatus.innerText = "Microphone access denied. Check Windows Privacy Settings.";
-    }
-}
-
-async function processAudio(blob) {
+    if (isRecording) return;
+    isRecording = true;
+    micBtn.classList.add('recording');
+    micBtn.innerHTML = '🔴';
     if (currentMode === 'voice') {
-        voiceStatus.innerText = "Processing...";
+        voiceCenter.classList.add('listening');
+        voiceStatus.innerText = "Initializing Microphone...";
     }
     
     try {
-        // Decode Blob to Float32Array
-        const arrayBuffer = await blob.arrayBuffer();
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        const audioData = audioBuffer.getChannelData(0);
-        
-        if (currentMode === 'voice') {
-            voiceStatus.innerText = `Processing ${audioBuffer.duration.toFixed(1)}s audio...`;
-        }
-
-        const output = await transcriber(audioData, {
-            language: 'english',
-            task: 'transcribe'
-        });
-        let text = output.text.trim();
-        
-        // Filter out common hallucinations if audio is mostly silence
-        const lowerText = text.toLowerCase().replace(/[^a-z]/g, '');
-        if (lowerText === 'you' || lowerText === 'thankyou' || lowerText === 'thanksforwatching') {
-            text = '';
-        }
-        
+        const text = await invoke('start_native_listening');
         if (text) {
             input.value = text;
             if (currentMode === 'voice') {
@@ -239,27 +172,49 @@ async function processAudio(blob) {
                 }, 3000);
             }
         }
-    } catch(err) {
-        console.error("Whisper decoding error:", err);
-        if (currentMode === 'voice') voiceStatus.innerText = "Error decoding audio.";
-    }
-    
-    if (currentMode === 'voice') {
-        setTimeout(() => {
-            if (!isRecording) voiceStatus.innerText = "Tap to start listening...";
-        }, 1500);
-    }
-}
-
-micBtn.addEventListener('click', () => {
-    if (isRecording) {
-        mediaRecorder.stop();
+    } catch (err) {
+        console.error("Voice recognition error:", err);
+        if (currentMode === 'voice') {
+            voiceStatus.innerText = err === "TIMEOUT" ? "Timeout: No speech detected." : "Error: Could not recognize speech.";
+        }
+    } finally {
         isRecording = false;
         micBtn.classList.remove('recording');
         micBtn.innerHTML = '🎙️';
         voiceCenter.classList.remove('listening');
-    } else {
+        if (currentMode === 'voice') {
+            setTimeout(() => {
+                if (!isRecording) voiceStatus.innerText = "Tap to start listening...";
+            }, 1500);
+        }
+    }
+}
+
+micBtn.addEventListener('click', () => {
+    if (!isRecording) {
         startRecording();
+    }
+});
+
+listen('voice-state', (event) => {
+    if (currentMode !== 'voice') return;
+    const state = event.payload;
+    if (state === 'READY') {
+        voiceStatus.innerText = "Listening... Speak now.";
+    } else if (state === 'SPEAKING') {
+        voiceStatus.innerText = "Speech detected... Processing...";
+    } else if (state === 'TIMEOUT') {
+        voiceStatus.innerText = "Timeout: No speech detected.";
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        micBtn.innerHTML = '🎙️';
+        voiceCenter.classList.remove('listening');
+    } else if (state === 'ERROR') {
+        voiceStatus.innerText = "Error recognizing speech.";
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        micBtn.innerHTML = '🎙️';
+        voiceCenter.classList.remove('listening');
     }
 });
 

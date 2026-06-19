@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Transcriber — Live Speech to Text</title>
+<style>
+  :root{
+    --bg: #15141a;
+    --bg-raised: #1d1c24;
+    --line: #2c2a35;
+    --paper: #f2efe9;
+    --paper-dim: #9a978e;
+    --amber: #e8a33d;
+    --amber-dim: #6b5328;
+    --teal: #5fd4c4;
+    --red: #e8593d;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(circle at 15% -10%, #211f29 0%, transparent 45%),
+      var(--bg);
+    color:var(--paper);
+    font-family: 'Courier New', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    min-height:100vh;
+    padding: 28px 18px 60px;
+  }
+  .wrap{ max-width: 760px; margin: 0 auto; }
+
+  /* ---- Header ---- */
+  .deck-label{
+    display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 14px; margin-bottom: 22px;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+  .deck-label h1{
+    font-size: 26px; letter-spacing: 0.5px; margin:0; font-weight: 700;
+    font-style: italic;
+  }
+  .deck-label .tag{
+    font-family: 'Courier New', monospace;
+    font-size: 11px; letter-spacing: 2px; color: var(--paper-dim);
+    text-transform: uppercase;
+  }
+
+  /* ---- Status / transport bar ---- */
+  .transport{
+    display:flex; align-items:center; gap:14px;
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+  }
+  .rec-light{
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #4a3a2a; flex-shrink:0;
+    box-shadow: inset 0 0 2px #000;
+    transition: background .15s, box-shadow .15s;
+  }
+  .rec-light.live{
+    background: var(--red);
+    box-shadow: 0 0 8px 2px rgba(232,89,61,0.65);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{ opacity:1; } 50%{ opacity:.55; }
+  }
+  .status-text{
+    font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--paper-dim); min-width: 140px;
+  }
+  .status-text.live{ color: var(--amber); }
+
+  canvas#meter{
+    flex: 1; height: 36px; border-radius: 4px;
+    background: #0e0d12;
+    border: 1px solid var(--line);
+  }
+
+  button{
+    font-family: inherit; cursor:pointer;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--paper);
+    border-radius: 7px;
+    padding: 9px 16px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all .15s;
+  }
+  button:hover{ border-color: var(--amber); color: var(--amber); }
+  button:active{ transform: scale(0.97); }
+  button.primary{
+    background: var(--amber);
+    color: #1c150a;
+    border-color: var(--amber);
+    font-weight: bold;
+  }
+  button.primary:hover{ background: #f3b554; color:#1c150a; }
+  button.primary.stop{
+    background: var(--red); border-color: var(--red); color: #2a0f08;
+  }
+  button:disabled{ opacity:.35; cursor:not-allowed; }
+  button:disabled:hover{ border-color: var(--line); color: var(--paper); }
+
+  .controls-row{
+    display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 18px;
+  }
+
+  /* ---- Transcript paper ---- */
+  .page{
+    background: var(--paper);
+    color: #2a2620;
+    border-radius: 3px;
+    padding: 30px 34px;
+    min-height: 320px;
+    box-shadow: 0 14px 40px rgba(0,0,0,0.45);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 17px;
+    line-height: 1.75;
+    position: relative;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .page::before{
+    content:"";
+    position:absolute; left:0; top:0; bottom:0; width:3px;
+    background: repeating-linear-gradient(180deg, var(--amber) 0 14px, transparent 14px 24px);
+    opacity:.55;
+    border-radius: 3px 0 0 3px;
+  }
+  .page .placeholder{ color: #b6b2a6; font-style: italic; }
+  .interim{ color:#8a8678; font-style: italic; }
+
+  .meta-row{
+    display:flex; justify-content:space-between;
+    margin-top: 10px;
+    font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--paper-dim);
+  }
+
+  .footnote{
+    margin-top: 26px; font-size: 12px; color: var(--paper-dim);
+    line-height: 1.6; border-top: 1px solid var(--line); padding-top: 14px;
+  }
+  .footnote b{ color: var(--teal); font-weight: normal; }
+
+  .unsupported{
+    background: #2a1812; border:1px solid #5a3424; color:#f0b89a;
+    padding:14px 16px; border-radius:8px; margin-bottom:18px; font-size:13px; line-height:1.6;
+  }
+
+  @media (max-width:480px){
+    .page{ padding:22px 20px; font-size:15.5px; }
+    .deck-label h1{ font-size:21px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="deck-label">
+    <h1>Transcriber</h1>
+    <div class="tag">Live Speech &rarr; Text</div>
+  </div>
+
+  <div id="unsupportedBox" class="unsupported" style="display:none;">
+    Your browser doesn't support live speech recognition. Open this page in
+    <b>Chrome</b> or <b>Edge</b> on desktop or Android for it to work.
+  </div>
+
+  <div class="transport">
+    <div id="recLight" class="rec-light"></div>
+    <div id="statusText" class="status-text">idle</div>
+    <canvas id="meter"></canvas>
+  </div>
+
+  <div class="controls-row">
+    <button id="toggleBtn" class="primary">Start listening</button>
+    <button id="clearBtn">Clear</button>
+    <button id="copyBtn">Copy text</button>
+    <button id="downloadBtn">Download .txt</button>
+  </div>
+
+  <div class="page" id="page">
+    <span class="placeholder" id="placeholder">Press "Start listening" and speak. Your words will appear here, capitalised and punctuated automatically at each natural pause.</span>
+  </div>
+
+  <div class="meta-row">
+    <span id="wordCount">0 words</span>
+    <span id="charCount">0 characters</span>
+  </div>
+
+  <div class="footnote">
+    <b>How punctuation works —</b> every time you pause, the current phrase is closed
+    with a full stop and the next phrase starts with a capital letter. Say "comma",
+    "question mark", "new line" etc. out loud to insert them, or just punctuate
+    afterwards in the text. Runs entirely in your browser — audio never leaves your device.
+  </div>
+
+</div>
+
+<script>
+(function(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const toggleBtn = document.getElementById('toggleBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const page = document.getElementById('page');
+  const placeholder = document.getElementById('placeholder');
+  const statusText = document.getElementById('statusText');
+  const recLight = document.getElementById('recLight');
+  const wordCountEl = document.getElementById('wordCount');
+  const charCountEl = document.getElementById('charCount');
+  const unsupportedBox = document.getElementById('unsupportedBox');
+  const meterCanvas = document.getElementById('meter');
+  const meterCtx = meterCanvas.getContext('2d');
+
+  let listening = false;
+  let finalText = '';     // committed, punctuated transcript
+  let interimText = '';   // current in-progress phrase
+  let recognition = null;
+  let shouldRestart = false;
+
+  // ---------- voice command words spoken aloud ----------
+  const spokenPunct = [
+    [/\bfull stop\b/gi, '.'],
+    [/\bperiod\b/gi, '.'],
+    [/\bcomma\b/gi, ','],
+    [/\bquestion mark\b/gi, '?'],
+    [/\bexclamation (mark|point)\b/gi, '!'],
+    [/\bnew line\b/gi, '\n'],
+    [/\bnew paragraph\b/gi, '\n\n'],
+    [/\bcolon\b/gi, ':'],
+    [/\bsemicolon\b/gi, ';'],
+    [/\bopen quote\b/gi, '“'],
+    [/\bclose quote\b/gi, '”'],
+  ];
+
+  function applySpokenCommands(str){
+    spokenPunct.forEach(([re, rep]) => { str = str.replace(re, rep); });
+    return str;
+  }
+
+  function cleanPhrase(raw){
+    let t = raw.trim();
+    if(!t) return '';
+    t = applySpokenCommands(t);
+    // collapse stray spaces before punctuation introduced by commands
+    t = t.replace(/\s+([,.!?;:])/g, '$1');
+    t = t.replace(/\s{2,}/g, ' ').trim();
+    if(!t) return '';
+    // capitalise first letter
+    t = t.charAt(0).toUpperCase() + t.slice(1);
+    // standalone " i " -> " I "
+    t = t.replace(/\bi\b/g, 'I');
+    // end with a full stop unless it already ends with terminal punctuation
+    if(!/[.!?:;,\u201d"]$/.test(t)){
+      t += '.';
+    }
+    return t;
+  }
+
+  function render(){
+    const hasText = finalText.trim().length > 0 || interimText.trim().length > 0;
+    if(!hasText){
+      page.innerHTML = '';
+      page.appendChild(placeholder);
+    } else {
+      page.textContent = finalText;
+      if(interimText){
+        const span = document.createElement('span');
+        span.className = 'interim';
+        span.textContent = (finalText && !finalText.endsWith('\n') && !finalText.endsWith(' ') ? ' ' : '') + interimText;
+        page.appendChild(span);
+      }
+    }
+    const words = (finalText + ' ' + interimText).trim().split(/\s+/).filter(Boolean);
+    wordCountEl.textContent = words.length + (words.length === 1 ? ' word' : ' words');
+    charCountEl.textContent = finalText.length + ' characters';
+  }
+
+  function setStatus(text, live){
+    statusText.textContent = text;
+    statusText.classList.toggle('live', !!live);
+    recLight.classList.toggle('live', !!live);
+  }
+
+  // ---------- Speech recognition ----------
+  if(!SR){
+    unsupportedBox.style.display = 'block';
+    toggleBtn.disabled = true;
+    setStatus('unsupported');
+  } else {
+    recognition = new SR();
+    recognition.lang = 'en-US';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      for(let i = event.resultIndex; i < event.results.length; i++){
+        const res = event.results[i];
+        const transcript = res[0].transcript;
+        if(res.isFinal){
+          const phrase = cleanPhrase(transcript);
+          if(phrase){
+            finalText += (finalText && !finalText.endsWith('\n') ? ' ' : '') + phrase;
+          }
+        } else {
+          interim += transcript;
+        }
+      }
+      interimText = interim;
+      render();
+    };
+
+    recognition.onerror = (e) => {
+      if(e.error === 'no-speech' || e.error === 'audio-capture'){
+        return; // transient, recognition keeps/retries
+      }
+      if(e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+        setStatus('mic blocked', false);
+        listening = false;
+        shouldRestart = false;
+        toggleBtn.textContent = 'Start listening';
+        toggleBtn.classList.remove('stop');
+        stopMeter();
+      }
+    };
+
+    recognition.onend = () => {
+      if(shouldRestart && listening){
+        try{ recognition.start(); } catch(e){}
+      } else {
+        setStatus('idle', false);
+        toggleBtn.textContent = 'Start listening';
+        toggleBtn.classList.remove('stop');
+        stopMeter();
+      }
+    };
+  }
+
+  function startListening(){
+    listening = true;
+    shouldRestart = true;
+    try{ recognition.start(); } catch(e){}
+    setStatus('listening…', true);
+    toggleBtn.textContent = 'Stop listening';
+    toggleBtn.classList.add('stop');
+    startMeter();
+  }
+
+  function stopListening(){
+    listening = false;
+    shouldRestart = false;
+    if(recognition){ recognition.stop(); }
+    setStatus('idle', false);
+    toggleBtn.textContent = 'Start listening';
+    toggleBtn.classList.remove('stop');
+    stopMeter();
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    if(!SR) return;
+    if(listening){ stopListening(); } else { startListening(); }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    finalText = '';
+    interimText = '';
+    render();
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    try{
+      await navigator.clipboard.writeText(finalText.trim());
+      const old = copyBtn.textContent;
+      copyBtn.textContent = 'Copied ✓';
+      setTimeout(() => copyBtn.textContent = old, 1200);
+    }catch(e){
+      const ta = document.createElement('textarea');
+      ta.value = finalText.trim();
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const blob = new Blob([finalText.trim()], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'transcript.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // ---------- live waveform / VU meter ----------
+  let audioCtx, analyser, dataArray, source, rafId, stream;
+
+  function resizeCanvas(){
+    const rect = meterCanvas.getBoundingClientRect();
+    meterCanvas.width = rect.width * devicePixelRatio;
+    meterCanvas.height = rect.height * devicePixelRatio;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  async function startMeter(){
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+      drawMeter();
+    }catch(e){
+      // mic permission for meter denied; recognition may still work independently
+    }
+  }
+
+  function drawMeter(){
+    rafId = requestAnimationFrame(drawMeter);
+    if(!analyser) return;
+    analyser.getByteFrequencyData(dataArray);
+    const w = meterCanvas.width, h = meterCanvas.height;
+    meterCtx.clearRect(0,0,w,h);
+    const barCount = 40;
+    const step = Math.floor(dataArray.length / barCount);
+    const barW = w / barCount;
+    for(let i=0;i<barCount;i++){
+      const v = dataArray[i*step] / 255;
+      const barH = Math.max(2, v * h);
+      const x = i * barW;
+      const y = (h - barH) / 2;
+      meterCtx.fillStyle = i % 5 === 0 ? '#e8a33d' : '#5fd4c4';
+      meterCtx.globalAlpha = 0.85;
+      meterCtx.fillRect(x + barW*0.18, y, barW*0.64, barH);
+    }
+  }
+
+  function stopMeter(){
+    if(rafId) cancelAnimationFrame(rafId);
+    if(source) try{ source.disconnect(); }catch(e){}
+    if(audioCtx) try{ audioCtx.close(); }catch(e){}
+    if(stream) stream.getTracks().forEach(t => t.stop());
+    meterCtx.clearRect(0,0,meterCanvas.width, meterCanvas.height);
+    analyser = null;
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
