@@ -54,6 +54,9 @@ async function handleCommand(cmd) {
         appendMessage(result, false);
     } catch (error) {
         appendMessage(error, false, true);
+    }
+}
+
 const suggestionsBox = document.getElementById('suggestions');
 const modeChatBtn = document.getElementById('mode-chat');
 const modeVoiceBtn = document.getElementById('mode-voice');
@@ -75,7 +78,6 @@ modeChatBtn.addEventListener('click', () => {
     voiceView.classList.add('hidden');
     if (shouldListenContinuously) {
         shouldListenContinuously = false;
-        recognition.stop();
     }
 });
 
@@ -88,26 +90,20 @@ modeVoiceBtn.addEventListener('click', () => {
     chatView.classList.remove('active');
     chatView.classList.add('hidden');
     
-    // Auto-start voice recognition if available
-    if (SpeechRecognition) {
-        shouldListenContinuously = true;
-        try { recognition.start(); } catch(e) {}
-    } else {
-        voiceStatus.innerText = "Voice not supported. Please download Vosk in Settings.";
-    }
+    // Auto-start native voice recognition
+    shouldListenContinuously = true;
+    listenLoop();
 });
 
 voiceCenter.addEventListener('click', () => {
-    if (currentMode !== 'voice' || !SpeechRecognition) return;
+    if (currentMode !== 'voice') return;
     
     if (isRecording || shouldListenContinuously) {
         shouldListenContinuously = false;
-        recognition.stop();
         voiceStatus.innerText = "Paused. Tap to listen.";
     } else {
         shouldListenContinuously = true;
-        voiceStatus.innerText = "Listening...";
-        try { recognition.start(); } catch(e) {}
+        listenLoop();
     }
 });
 
@@ -154,99 +150,60 @@ input.addEventListener('input', async (e) => {
     }
 });
 
-// Voice Detection (Web Speech API)
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SpeechRecognition) {
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.lang = 'en-US';
-    recognition.interimResults = true;
+let isRecording = false;
+let shouldListenContinuously = false;
+
+async function listenLoop() {
+    if (!shouldListenContinuously) return;
+    isRecording = true;
+    micBtn.classList.add('recording');
+    micBtn.innerHTML = '🔴';
     
-    let isRecording = false;
-    let shouldListenContinuously = false;
+    if (currentMode === 'voice') {
+        voiceCenter.classList.add('listening');
+        voiceStatus.innerText = "Listening...";
+    }
     
-    micBtn.addEventListener('click', () => {
-        if (isRecording || shouldListenContinuously) {
-            shouldListenContinuously = false;
-            recognition.stop();
-        } else {
-            shouldListenContinuously = true;
-            recognition.start();
-        }
-    });
-    
-    recognition.onstart = () => {
-        isRecording = true;
-        micBtn.classList.add('recording');
-        micBtn.innerHTML = '🔴';
-        
-        if (currentMode === 'voice') {
-            voiceCenter.classList.add('listening');
-            voiceStatus.innerText = "Listening...";
-        }
-    };
-    
-    recognition.onresult = (event) => {
-        let interimTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-                const finalTranscript = event.results[i][0].transcript;
-                input.value = finalTranscript;
-                if (currentMode === 'voice') {
-                    voiceTranscript.innerText = finalTranscript;
-                    voiceStatus.innerText = "Processing...";
-                }
-                handleCommand(finalTranscript).then(() => {
-                    if (currentMode === 'voice') {
-                        setTimeout(() => {
-                            if (isRecording) voiceStatus.innerText = "Listening...";
-                            voiceTranscript.innerText = "";
-                        }, 2000);
-                    }
-                });
-            } else {
-                interimTranscript += event.results[i][0].transcript;
-            }
-        }
-        if (interimTranscript !== '') {
-            input.value = interimTranscript;
+    try {
+        const text = await invoke('start_native_listening');
+        if (text) {
+            input.value = text;
             if (currentMode === 'voice') {
-                voiceTranscript.innerText = interimTranscript;
+                voiceTranscript.innerText = text;
+                voiceStatus.innerText = "Processing...";
+            }
+            await handleCommand(text);
+            if (currentMode === 'voice') {
+                if (shouldListenContinuously) voiceStatus.innerText = "Listening...";
+                voiceTranscript.innerText = "";
             }
         }
-    };
+    } catch (e) {
+        console.error("Native voice error:", e);
+    }
     
-    recognition.onerror = (event) => {
-        console.error("Speech recognition error", event.error);
-        if (event.error !== 'no-speech') {
-            appendMessage(`Voice error: ${event.error}`, false, true);
-        }
-    };
+    isRecording = false;
+    micBtn.classList.remove('recording');
+    micBtn.innerHTML = '🎙️';
+    voiceCenter.classList.remove('listening');
     
-    recognition.onend = () => {
-        isRecording = false;
-        micBtn.classList.remove('recording');
-        micBtn.innerHTML = '🎙️';
-        voiceCenter.classList.remove('listening');
-        if (currentMode === 'voice' && voiceStatus.innerText === "Listening...") {
+    if (shouldListenContinuously) {
+        setTimeout(listenLoop, 100);
+    } else {
+        if (currentMode === 'voice') {
              voiceStatus.innerText = "Tap to start listening...";
         }
-        
-        if (shouldListenContinuously) {
-            try {
-                recognition.start();
-            } catch(e) {
-                console.error("Failed to restart continuous listening", e);
-            }
-        }
-    };
-} else {
-    micBtn.title = "Voice recognition not supported in this environment";
-    micBtn.style.opacity = 0.5;
-    micBtn.addEventListener('click', () => {
-        appendMessage("Voice recognition is not supported in this environment.", false, true);
-    });
+    }
 }
+
+micBtn.addEventListener('click', () => {
+    if (isRecording || shouldListenContinuously) {
+        shouldListenContinuously = false;
+    } else {
+        shouldListenContinuously = true;
+        listenLoop();
+    }
+});
 
 // Listen for background events (like timer toast)
 listen('show-toast', (event) => {

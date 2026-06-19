@@ -77,6 +77,33 @@ fn get_suggestions(query: String) -> Vec<String> {
     suggestions
 }
 
+#[tauri::command]
+async fn start_native_listening() -> Result<String, String> {
+    let script = r#"
+        Add-Type -AssemblyName System.Speech
+        $recognizer = New-Object System.Speech.Recognition.SpeechRecognitionEngine
+        $recognizer.SetInputToDefaultAudioDevice()
+        $grammar = New-Object System.Speech.Recognition.DictationGrammar
+        $recognizer.LoadGrammar($grammar)
+        $result = $recognizer.Recognize()
+        if ($result -ne $null) { Write-Host $result.Text }
+    "#;
+    use std::os::windows::process::CommandExt;
+    let output = std::process::Command::new("powershell")
+        .creation_flags(0x08000000)
+        .arg("-Command")
+        .arg(script)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() {
+        Err("No speech detected".to_string())
+    } else {
+        Ok(text)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -92,7 +119,8 @@ pub fn run() {
             open_logs_folder,
             get_builtin_commands_json,
             get_suggestions,
-            voice_setup::download_vosk_model
+            voice_setup::download_vosk_model,
+            start_native_listening
         ])
         .setup(|app| {
             logger::init();

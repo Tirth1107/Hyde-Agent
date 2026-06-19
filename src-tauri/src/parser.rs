@@ -175,9 +175,10 @@ fn check_prefixes(n: &str) -> Option<ParseResult> {
         });
     }
 
-    let mail_about_re = Regex::new(r"^(?:find|search|show)(?: me)?(?: the)? (?:mail|mails|email|emails) (?:about|for|regarding|of) (.+)").unwrap();
+    let mail_about_re = Regex::new(r"^(?:find|search|show)(?: me)?(?: the)? (?:(?:mail|mails|email|emails) (?:about|for|regarding|of|with) (.+)|(.+) (?:in|on) (?:mail|mails|email|emails))").unwrap();
     if let Some(caps) = mail_about_re.captures(n) {
-        let topic = caps.get(1).unwrap().as_str();
+        // The topic can be in capture group 1 or 2
+        let topic = caps.get(1).or_else(|| caps.get(2)).unwrap().as_str();
         return Some(ParseResult {
             action_type: ActionType::MailSearch,
             parameters: HashMap::from([("provider".to_string(), "gmail".to_string()), ("query".to_string(), topic.to_string())]),
