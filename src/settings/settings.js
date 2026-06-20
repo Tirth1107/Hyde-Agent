@@ -192,3 +192,41 @@ document.getElementById('add-custom-btn').addEventListener('click', async () => 
 // Init
 loadBuiltinCommands();
 loadCustomCommands();
+
+// Auto-check for updates quietly on load
+setTimeout(() => {
+  invoke('check_update').then(msg => {
+    if (msg.includes("Update installed")) {
+      const statusText = document.getElementById('update-status-text');
+      if(statusText) {
+          statusText.innerText = msg;
+          statusText.style.color = '#4ade80';
+      }
+    }
+  }).catch(e => console.log("Auto-update check failed:", e));
+}, 5000);
+
+// Updater logic
+const checkUpdateBtn = document.getElementById('check-update-btn');
+if (checkUpdateBtn) {
+  checkUpdateBtn.addEventListener('click', async () => {
+    const statusText = document.getElementById('update-status-text');
+    statusText.style.color = 'var(--text-secondary)';
+    statusText.innerText = "Checking for updates...";
+    checkUpdateBtn.disabled = true;
+
+    try {
+      const msg = await invoke('check_update');
+      statusText.innerText = msg;
+      if (msg.includes("Update installed")) {
+        statusText.style.color = '#4ade80';
+      }
+    } catch (err) {
+      console.error(err);
+      statusText.style.color = '#f87171';
+      statusText.innerText = `Update Error: ${err}`;
+    } finally {
+      checkUpdateBtn.disabled = false;
+    }
+  });
+}

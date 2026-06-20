@@ -13,6 +13,7 @@ use tauri::{
     Manager, AppHandle,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_updater::UpdaterExt;
 use std::sync::Arc;
 
 /// Global engine IPC handle (set during setup)
@@ -160,6 +161,37 @@ fn get_gemini_api_key() -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn check_update(app: tauri::AppHandle) -> Result<String, String> {
+    let updater = match app.updater() {
+        Ok(u) => u,
+        Err(e) => return Err(e.to_string()),
+    };
+    
+    match updater.check().await {
+        Ok(Some(update)) => {
+            // Found an update
+            if let Err(e) = update.download_and_install(|chunk_length, content_length| {
+                println!("Downloaded {} of {:?}", chunk_length, content_length);
+            }, || {
+                println!("Download finished");
+            }).await {
+                return Err(format!("Failed to download update: {}", e));
+            }
+            Ok("Update installed! Please restart the app.".to_string())
+        }
+        Ok(None) => Ok("You are on the latest version.".to_string()),
+        Err(e) => {
+            let err_str = e.to_string();
+            if err_str.contains("Could not fetch a valid release JSON from the remote") {
+                Ok("No updates available (remote releases not found).".to_string())
+            } else {
+                Err(format!("Failed to check for updates: {}", e))
+            }
+        }
+    }
+}
+
+#[tauri::command]
 fn save_gemini_api_key(key: String) -> Result<(), String> {
     if let Some(home) = dirs::home_dir() {
         let config_dir = home.join(".hyde-agent");
@@ -270,7 +302,8 @@ pub fn run() {
             get_suggestions,
             start_native_listening,
             get_ai_settings,
-            save_ai_settings
+            save_ai_settings,
+            check_update
         ])
         .setup(|app| {
             logger::init();
