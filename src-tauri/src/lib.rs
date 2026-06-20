@@ -5,6 +5,7 @@ pub mod custom_commands;
 pub mod parser;
 pub mod executor;
 pub mod ipc;
+pub mod core;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -53,82 +54,8 @@ async fn execute_command(app: AppHandle, command: String) -> Result<String, Stri
     if let Some(engine) = get_engine() {
         match engine.classify(trimmed).await {
             Ok(result) => {
-                let success = result.success.unwrap_or(false);
-                let response = result.response.clone().unwrap_or_default();
-                let intent = result.intent.clone().unwrap_or_default();
-
-                // If the Python engine already executed the action (e.g., opened a website),
-                // just return its response.
-                if success && !response.is_empty() {
-                    // Check if Rust needs to do additional work
-                    if let Some(rust_action) = &result.rust_action {
-                        // Execute system controls, timers, etc. natively in Rust
-                        let action = rust_action.get("action").cloned().unwrap_or_default();
-                        let mut params = std::collections::HashMap::new();
-                        for (k, v) in rust_action {
-                            params.insert(k.clone(), v.clone());
-                        }
-
-                        let rust_result = match action.as_str() {
-                            "volume up" | "volume down" | "mute" | "lock screen" |
-                            "sleep" | "shutdown" | "restart" | "brightness up" |
-                            "brightness down" | "screenshot" | "empty trash" |
-                            "set_volume" => {
-                                executor::system::control(&params)
-                            }
-                            "set_timer" | "cancel_timer" | "list_timers" => {
-                                // Timer params come from Python
-                                let res = executor::timer::execute(&app, &params);
-                                // For listing timers, we want to return the Rust response instead of Python's
-                                if action == "list_timers" {
-                                    if let Ok(rust_msg) = &res {
-                                        return Ok(rust_msg.clone());
-                                    }
-                                }
-                                res
-                            }
-                            _ => Ok(String::new()),
-                        };
-
-                        // Return the Python response (which is the human-friendly message)
-                        // but check if Rust execution failed
-                        if let Err(rust_err) = rust_result {
-                            return Err(format!("{} (Execution error: {})", response, rust_err));
-                        }
-                    }
-
-                    return Ok(response);
-                }
-
-                // Handle AI intents — forward to AI executor
-                if result.requires_ai.unwrap_or(false) {
-                    let ai_query = result.ai_query.clone().unwrap_or_default();
-                    let ai_type = result.ai_type.clone().unwrap_or("chat".to_string());
-                    
-                    let mut params = std::collections::HashMap::new();
-                    params.insert("query".to_string(), ai_query);
-                    params.insert("ai_type".to_string(), ai_type);
-                    
-                    match executor::ai::execute(&params).await {
-                        Ok(response) => return Ok(response),
-                        Err(e) => return Err(e),
-                    }
-                }
-
-                // If intent was recognized but response is empty, try Rust fallback
-                if !intent.is_empty() && response.is_empty() {
-                    // Try the Rust parser as fallback
-                    if let Some(parsed) = parser::parse_input(trimmed) {
-                        return executor::execute(&app, parsed).await;
-                    }
-                }
-
-                // Low confidence or unrecognized
-                if !success {
-                    return Err(response);
-                }
-
-                return Ok(response);
+                // Execute via the V2 Router Pipeline
+                return crate::core::router::execute(&app, result).await;
             }
             Err(ipc_err) => {
                 // IPC failed — fall back to Rust parser
@@ -153,6 +80,23 @@ async fn execute_command(app: AppHandle, command: String) -> Result<String, Stri
 fn get_custom_commands_json() -> Result<String, String> {
     let cmds = custom_commands::get_custom_commands();
     serde_json::to_string(&cmds).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_ai_settings() -> Result<serde_json::Value, String> {
+    let provider = crate::core::db::get_setting("ai_provider").unwrap_or_else(|| "gemini".to_string());
+    let key = crate::core::db::get_setting("ai_api_key").unwrap_or_default();
+    Ok(serde_json::json!({
+        "provider": provider,
+        "key": key
+    }))
+}
+
+#[tauri::command]
+fn save_ai_settings(provider: String, key: String) -> Result<(), String> {
+    crate::core::db::set_setting("ai_provider", &provider).map_err(|e| e.to_string())?;
+    crate::core::db::set_setting("ai_api_key", &key).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -287,6 +231,9 @@ fn start_hyde_engine_daemon(app: tauri::AppHandle) {
                             app.emit("voice-state", "ERROR").unwrap_or(());
                         } else if line == "[STATE: SUCCESS]" {
                             app.emit("voice-state", "SUCCESS").unwrap_or(());
+                        } else if line.starts_with("[STATE: EXECUTE:") {
+                            let text = line.trim_start_matches("[STATE: EXECUTE:").trim();
+                            app.emit("voice-execute", text).unwrap_or(());
                         } else if line.starts_with("[User]:") {
                             let text = line.trim_start_matches("[User]:").trim();
                             app.emit("voice-state", format!("TEXT:{}", text)).unwrap_or(());
@@ -309,6 +256,7 @@ fn start_hyde_engine_daemon(app: tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
@@ -321,12 +269,17 @@ pub fn run() {
             get_builtin_commands_json,
             get_suggestions,
             start_native_listening,
-            get_gemini_api_key,
-            save_gemini_api_key
+            get_ai_settings,
+            save_ai_settings
         ])
         .setup(|app| {
             logger::init();
             custom_commands::load_custom_commands();
+            if let Err(e) = crate::core::db::init() {
+                eprintln!("Failed to init SQLite DB: {}", e);
+            }
+            
+            crate::core::scheduler::start_scheduler(app.handle().clone());
             
             // Start the Hyde Neural Engine Daemon with IPC
             start_hyde_engine_daemon(app.handle().clone());

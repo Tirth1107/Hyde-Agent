@@ -34,6 +34,7 @@ pub struct IpcResult {
     pub rust_action: Option<HashMap<String, String>>,
     pub status: Option<String>,
     pub context: Option<HashMap<String, String>>,
+    pub original_text: Option<String>,
 }
 
 /// A full JSON-RPC response from Python
@@ -166,6 +167,7 @@ impl EngineIpc {
                     rust_action: None,
                     status: None,
                     context: None,
+                    original_text: None,
                 });
             }
         }

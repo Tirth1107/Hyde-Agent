@@ -141,7 +141,7 @@ class ActionExecutor:
         return self._result(True, msg, "open_website")
 
     def _open_app(self, params: dict) -> dict:
-        target = params.get("target", "").strip()
+        target = params.get("app_name", "").strip()
         if not target:
             return self._result(False, "No app specified.", "error")
 
@@ -208,7 +208,7 @@ class ActionExecutor:
         return self._result(False, msg, "app_not_found")
 
     def _close_app(self, params: dict) -> dict:
-        target = params.get("target", "").strip()
+        target = params.get("app_name", "").strip()
         if not target:
             return self._result(False, "No app specified to close.", "error")
 

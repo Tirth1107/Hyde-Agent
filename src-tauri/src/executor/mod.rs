@@ -54,7 +54,7 @@ pub async fn execute(app_handle: &AppHandle, cmd: ParseResult) -> Result<String,
         ActionType::MediaControl => media::control(&cmd.parameters),
         ActionType::AiChat | ActionType::AiWrite | ActionType::AiExplain |
         ActionType::AiSummarize | ActionType::AiResearch => {
-            ai::execute(&cmd.parameters).await
+            ai::execute(app_handle, &cmd.parameters).await
         }
         ActionType::CustomRunCommand => {
             Err("Custom shell commands are not fully supported yet.".to_string())

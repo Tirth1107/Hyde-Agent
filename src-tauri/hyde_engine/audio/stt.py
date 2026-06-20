@@ -54,7 +54,7 @@ class SpeechToText:
                         if speaking:
                             if silence_start is None:
                                 silence_start = time.time()
-                            elif time.time() - silence_start > 1.5:  # 1.5s of silence after speaking
+                            elif time.time() - silence_start > 0.8:  # 0.8s of silence after speaking
                                 break
                         else:
                             if time.time() - wait_start > timeout:

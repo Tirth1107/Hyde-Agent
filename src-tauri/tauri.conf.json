@@ -36,6 +36,14 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Tirth1107/Hyde-Agent/releases/latest/download/latest.json"
+      ],
+      "pubkey": "INSERT_YOUR_PUBLIC_KEY_HERE"
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

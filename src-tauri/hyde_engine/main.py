@@ -28,6 +28,7 @@ import json
 import time
 import threading
 import traceback
+import winsound
 
 from .audio.wake_word import WakeWordDetector
 from .audio.stt import SpeechToText
@@ -112,6 +113,7 @@ def chat_loop(intent_parser: IntentParser, memory: ContextMemory, executor: Acti
                 "success": exec_result.get("success", False),
                 "response": exec_result.get("response", ""),
                 "action_taken": exec_result.get("action_taken", ""),
+                "original_text": text,
             }
 
             # If there's a Rust action to forward (e.g., system controls, timers)
@@ -119,8 +121,7 @@ def chat_loop(intent_parser: IntentParser, memory: ContextMemory, executor: Acti
                 response_data["rust_action"] = exec_result["rust_action"]
 
             # If intent requires AI (LLM), signal Rust to handle it
-            if payload["intent"] in ("AI_CHAT", "AI_WRITE", "AI_EXPLAIN",
-                                      "AI_SUMMARIZE", "AI_RESEARCH", "GENERAL_AI_CHAT"):
+            if payload["intent"] in ("AI_CHAT", "AI_GENERATION"):
                 response_data["requires_ai"] = True
                 response_data["ai_type"] = payload.get("parameters", {}).get("ai_type", "chat")
                 response_data["ai_query"] = payload.get("parameters", {}).get("query", text)
@@ -150,7 +151,8 @@ def voice_loop(wake_detector: WakeWordDetector, stt: SpeechToText, tts: TextToSp
             _send_state("IDLE")
             if wake_detector.listen_for_wake_word():
                 _send_state("READY")
-                tts.reply_wake()
+                # Instantaneous beep feedback instead of slow TTS
+                winsound.Beep(800, 150)
 
                 # Phase 2: Speech to Text (8s timeout)
                 text = stt.listen_and_transcribe(timeout=8.0)

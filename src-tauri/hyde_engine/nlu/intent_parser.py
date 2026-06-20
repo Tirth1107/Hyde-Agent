@@ -58,18 +58,18 @@ class IntentParser:
 
         # ── OPEN WEBSITE ───────────────────────────────────────────────
         self._add_rule("OPEN_WEBSITE", [
-            (r"(?:open|launch|go to|take me to|navigate to|visit)\s+(?:the\s+)?(?:website\s+)?([a-zA-Z0-9\-\.]+(?:\.(?:com|org|net|io|dev|app|ai|co|me|xyz|edu|gov)))", lambda m: {"target": m.group(1).strip()}),
-            (r"(?:open|launch|go to|take me to|navigate to|visit)\s+(?:the\s+)?(?:website\s+)?(https?://\S+)", lambda m: {"target": m.group(1).strip()}),
+            (r"(?:open|launch|go to|take me to|navigate to|visit)\s+(?:the\s+)?(?:website\s+)?([a-zA-Z0-9\-\.]+(?:\.(?:com|in|org|net|io|dev|app|ai|co|me|xyz|edu|gov)))", lambda m: {"url": m.group(1).strip()}),
+            (r"(?:open|launch|go to|take me to|navigate to|visit)\s+(?:the\s+)?(?:website\s+)?(https?://\S+)", lambda m: {"url": m.group(1).strip()}),
         ], base_confidence=0.95)
 
         # ── OPEN APP ──────────────────────────────────────────────────
         self._add_rule("OPEN_APP", [
-            (r"(?:open|launch|start|run)\s+(?:the\s+)?(?:app(?:lication)?\s+)?(.+)", lambda m: {"target": m.group(1).strip()}),
+            (r"(?:open|launch|start|run)\s+(?:the\s+)?(?:app(?:lication)?\s+)?(.+)", lambda m: {"app_name": m.group(1).strip()}),
         ], base_confidence=0.85)
 
         # ── CLOSE APP ─────────────────────────────────────────────────
         self._add_rule("CLOSE_APP", [
-            (r"(?:close|kill|quit|stop|exit|end|terminate)\s+(?:the\s+)?(?:app(?:lication)?\s+)?(.+)", lambda m: {"target": m.group(1).strip()}),
+            (r"(?:close|kill|quit|stop|exit|end|terminate)\s+(?:the\s+)?(?:app(?:lication)?\s+)?(.+)", lambda m: {"app_name": m.group(1).strip()}),
         ], base_confidence=0.90)
 
         # ── YOUTUBE SEARCH ────────────────────────────────────────────
@@ -263,18 +263,13 @@ class IntentParser:
         ], base_confidence=0.93)
 
         # ── AI INTENTS ────────────────────────────────────────────────
-        self._add_rule("AI_WRITE", [
-            (r"(?:write|draft|compose|create)\s+(?:me\s+)?(?:a\s+)?(.+?)\s*(?:letter|email|essay|report|proposal|document|message|story|poem|script|article|blog\s*post|bio|cover\s+letter|resignation\s+letter)", self._extract_ai_write),
-            (r"(?:write|draft|compose|create)\s+(?:me\s+)?(?:a\s+)?(.+)", lambda m: {"query": m.group(1).strip(), "ai_type": "write"}),
+        self._add_rule("AI_GENERATION", [
+            (r"(?:write|generate|create|design|draft|compose)\s+(?:me\s+)?(?:a\s+)?(.+)", lambda m: {"query": m.group(1).strip(), "ai_type": "write"}),
         ], base_confidence=0.88)
 
-        self._add_rule("AI_EXPLAIN", [
-            (r"(?:explain|describe|what\s+is|what\s+are|tell\s+me\s+about|how\s+does|how\s+do|how\s+to)\s+(.+)", lambda m: {"query": m.group(1).strip(), "ai_type": "explain"}),
+        self._add_rule("AI_CHAT", [
+            (r"(?:tell\s+me|tell\s+me\s+about|explain|research|what\s+is|who\s+is|how\s+does|how\s+do|how\s+to|why\s+does|compare|summarize|analyze)\s+(.+)", lambda m: {"query": m.group(1).strip(), "ai_type": "chat"}),
         ], base_confidence=0.80)
-
-        self._add_rule("AI_SUMMARIZE", [
-            (r"(?:summarize|summarise|sum\s+up|give\s+me\s+a\s+summary\s+of|tldr|tl;dr)\s+(.+)", lambda m: {"query": m.group(1).strip(), "ai_type": "summarize"}),
-        ], base_confidence=0.90)
 
         # ── SMALL TALK ────────────────────────────────────────────────
         self._add_rule("SMALL_TALK", [
@@ -344,8 +339,8 @@ class IntentParser:
         text = text.strip().lower()
         # Remove trailing punctuation
         text = re.sub(r'[.!?,;:]+$', '', text)
-        # Remove internal punctuation except apostrophes and hyphens
-        text = re.sub(r"[^\w\s'\-]", '', text)
+        # Remove internal punctuation except apostrophes, hyphens, and periods
+        text = re.sub(r"[^\w\s'\-\.]", '', text)
         # Strip filler / polite words iteratively
         for pattern in self.noise_patterns:
             while True:
@@ -413,9 +408,9 @@ class IntentParser:
             best_match = self._disambiguate(best_match, normalized)
             return best_match
 
-        # ── Fallback: GENERAL_AI_CHAT (NOT web search!) ────────────
+        # ── Fallback: AI_CHAT (NOT web search!) ────────────
         return {
-            "intent": "GENERAL_AI_CHAT",
+            "intent": "AI_CHAT",
             "confidence": 0.50,
             "parameters": {"query": original},
             "original_text": original,
@@ -427,28 +422,32 @@ class IntentParser:
         e.g., "open youtube" should be OPEN_WEBSITE, not OPEN_APP.
         """
         intent = result["intent"]
-        target = result["parameters"].get("target", "").lower().strip()
+        params = result["parameters"]
+        target = params.get("target") or params.get("app_name") or params.get("url") or ""
+        target = target.lower().strip()
 
         # OPEN_APP → OPEN_WEBSITE if target is a known website
         if intent == "OPEN_APP" and target in KNOWN_WEBSITES:
             result["intent"] = "OPEN_WEBSITE"
             result["confidence"] = min(result["confidence"] + 0.05, 1.0)
+            result["parameters"] = {"url": target}
 
         # OPEN_WEBSITE → OPEN_APP if target is a known local app
         if intent == "OPEN_WEBSITE" and target in KNOWN_APPS and target not in KNOWN_WEBSITES:
             result["intent"] = "OPEN_APP"
+            result["parameters"] = {"app_name": target}
 
         # AI_EXPLAIN should not match simple "what is <website>" queries
         if intent == "AI_EXPLAIN" and target in KNOWN_WEBSITES:
             result["intent"] = "OPEN_WEBSITE"
-            result["parameters"] = {"target": target}
+            result["parameters"] = {"url": target}
 
         # "play X" should be PLAY_MUSIC not YOUTUBE_SEARCH unless "on youtube" is in the text
         if intent == "PLAY_MUSIC":
-            song = result["parameters"].get("song", "")
+            song = params.get("song", "")
             # If the song name is a known website/app, it's probably "play spotify"
             if song.lower() in KNOWN_APPS or song.lower() in KNOWN_WEBSITES:
                 result["intent"] = "OPEN_APP"
-                result["parameters"] = {"target": song}
+                result["parameters"] = {"app_name": song}
 
         return result

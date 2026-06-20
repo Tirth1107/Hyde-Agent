@@ -1,19 +1,28 @@
 :root {
-  --bg-color: #1a1a1a;
-  --sidebar-bg: #121212;
-  --border-color: #333;
-  --text-primary: #f5f5f5;
-  --text-secondary: #a0a0a0;
-  --accent-color: #6366f1;
-  --accent-hover: #4f46e5;
-  --font-family: 'Inter', sans-serif;
+  --primary-color: #A72608;     /* Oxidized Iron */
+  --secondary-color: #BBC5AA;   /* Ash Grey */
+  --accent-color: #DDE2C6;      /* Beige */
+  
+  --bg-dark: #090C02;           /* Pitch Black */
+  --bg-glass: rgba(9, 12, 2, 0.95);
+  --sidebar-bg: rgba(9, 12, 2, 0.8);
+  --border-glass: rgba(187, 197, 170, 0.15);
+  --border-highlight: rgba(187, 197, 170, 0.25);
+  
+  --text-primary: #E6EED6;      /* Light Beige */
+  --text-secondary: #BBC5AA;    /* Ash Grey */
+  --text-muted: rgba(187, 197, 170, 0.6);
+  
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 8px;
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: var(--font-family);
-  background-color: var(--bg-color);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg-dark);
   color: var(--text-primary);
   height: 100vh;
   display: flex;
@@ -23,53 +32,69 @@ body {
   display: flex;
   width: 100%;
   height: 100%;
+  background: var(--bg-glass);
 }
 
 .sidebar {
   width: 250px;
   background-color: var(--sidebar-bg);
-  border-right: 1px solid var(--border-color);
-  padding: 20px 0;
+  border-right: 1px solid var(--border-glass);
+  padding: 32px 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar h2 {
-  margin: 0 20px 30px 20px;
-  font-size: 18px;
+  margin: 0 24px 32px 24px;
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: 0.5px;
+  letter-spacing: -0.3px;
 }
 
 .nav-item {
   display: block;
-  padding: 12px 20px;
+  padding: 12px 24px;
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: 14px;
+  font-size: 0.9rem;
   font-weight: 500;
   transition: all 0.2s ease;
+  border-left: 3px solid transparent;
 }
 
 .nav-item:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(255, 255, 255, 0.03);
   color: var(--text-primary);
 }
 
 .nav-item.active {
-  background-color: rgba(99, 102, 241, 0.15);
-  color: var(--accent-color);
-  border-right: 3px solid var(--accent-color);
+  background-color: rgba(99, 102, 241, 0.1);
+  color: var(--primary-color);
+  border-left: 3px solid var(--primary-color);
 }
 
 .content {
   flex-grow: 1;
-  padding: 40px;
+  padding: 48px;
   overflow-y: auto;
+}
+
+.content::-webkit-scrollbar {
+  width: 6px;
+}
+.content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.content::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
 }
 
 section {
   display: none;
   animation: fadeIn 0.3s ease;
+  max-width: 600px;
 }
 
 section.active {
@@ -77,55 +102,60 @@ section.active {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(5px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 h3 {
   margin-top: 0;
-  margin-bottom: 24px;
-  font-size: 24px;
+  margin-bottom: 8px;
+  font-size: 1.5rem;
   font-weight: 600;
+  letter-spacing: -0.5px;
 }
 
 .desc {
   color: var(--text-secondary);
-  margin-bottom: 24px;
-  font-size: 14px;
+  margin-bottom: 32px;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .setting-group {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 label {
   display: block;
-  font-size: 14px;
+  font-size: 0.9rem;
   font-weight: 500;
   margin-bottom: 8px;
   color: var(--text-secondary);
 }
 
-input[type="text"], select {
+input[type="text"], input[type="password"], select {
   width: 100%;
   max-width: 400px;
-  padding: 10px 12px;
-  background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
+  padding: 12px 16px;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-family: var(--font-family);
-  font-size: 14px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
 }
 
-input[type="text"]:focus, select:focus {
+input[type="text"]:focus, input[type="password"]:focus, select:focus {
   outline: none;
-  border-color: var(--accent-color);
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3);
 }
 
 .path-input-group {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   max-width: 500px;
 }
 
@@ -135,50 +165,86 @@ input[type="text"]:focus, select:focus {
 }
 
 button {
-  padding: 10px 16px;
+  padding: 10px 18px;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
-  font-family: var(--font-family);
+  font-family: inherit;
   transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .primary-btn {
-  background-color: var(--accent-color);
+  background-color: var(--primary-color);
   color: white;
 }
 
 .primary-btn:hover {
-  background-color: var(--accent-hover);
+  background-color: var(--secondary-color);
 }
 
 .secondary-btn {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
+  border: 1px solid var(--border-glass);
 }
 
 .secondary-btn:hover {
-  background-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.12);
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
   color: var(--text-primary);
 }
 
 .checkbox-label input {
-  accent-color: var(--accent-color);
-  width: 16px;
-  height: 16px;
+  accent-color: var(--primary-color);
+  width: 18px;
+  height: 18px;
 }
 
 .help-text {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* Commands List */
+.commands-list {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-top: 16px;
+}
+
+.command-item {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-glass);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.command-item:last-child {
+  border-bottom: none;
+}
+
+.cmd-details strong {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.cmd-details span {
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }

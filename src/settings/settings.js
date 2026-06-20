@@ -37,34 +37,57 @@ if (downloadBtn) {
   }
 }
 
-// Load API Key
-async function loadApiKey() {
+// Load AI Settings
+async function loadAiSettings() {
   try {
-    const key = await invoke('get_gemini_api_key');
-    if (key) {
-      document.getElementById('gemini-key-input').value = key;
+    const settings = await invoke('get_ai_settings');
+    if (settings) {
+      if (settings.provider) {
+        document.getElementById('ai-provider-select').value = settings.provider;
+      }
+      if (settings.key) {
+        document.getElementById('ai-key-input').value = settings.key;
+      }
+      updateDescText(settings.provider);
     }
   } catch (err) {
-    console.error("Failed to load API key", err);
+    console.error("Failed to load AI settings", err);
   }
+}
+
+document.getElementById('ai-provider-select')?.addEventListener('change', (e) => {
+    updateDescText(e.target.value);
+});
+
+function updateDescText(provider) {
+    const p = document.getElementById('ai-desc-text');
+    if (!p) return;
+    switch(provider) {
+        case "gemini": p.innerHTML = 'Get a free API key at <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--primary-color);">Google AI Studio</a>.'; break;
+        case "chatgpt": p.innerHTML = 'Get an API key at <a href="https://platform.openai.com/api-keys" target="_blank" style="color: var(--primary-color);">OpenAI</a>.'; break;
+        case "claude": p.innerHTML = 'Get an API key at <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color: var(--primary-color);">Anthropic Console</a>.'; break;
+        case "perplexity": p.innerHTML = 'Get an API key at <a href="https://www.perplexity.ai/settings/api" target="_blank" style="color: var(--primary-color);">Perplexity API</a>.'; break;
+        case "ollama": p.innerHTML = 'Ollama runs locally. No API key needed. Must be running on port 11434.'; break;
+    }
 }
 
 document.getElementById('save-key-btn')?.addEventListener('click', async () => {
   const btn = document.getElementById('save-key-btn');
-  const input = document.getElementById('gemini-key-input');
+  const provider = document.getElementById('ai-provider-select').value;
+  const key = document.getElementById('ai-key-input').value;
   try {
     btn.innerText = "Saving...";
-    await invoke('save_gemini_api_key', { key: input.value });
+    await invoke('save_ai_settings', { provider: provider, key: key });
     btn.innerText = "Saved!";
-    setTimeout(() => btn.innerText = "Save Key", 2000);
+    setTimeout(() => btn.innerText = "Save AI Settings", 2000);
   } catch (err) {
-    console.error("Failed to save API key", err);
+    console.error("Failed to save AI settings", err);
     btn.innerText = "Error";
-    setTimeout(() => btn.innerText = "Save Key", 2000);
+    setTimeout(() => btn.innerText = "Save AI Settings", 2000);
   }
 });
 
-loadApiKey();
+loadAiSettings();
 
 // Load Custom Commands
 async function loadCustomCommands() {

@@ -29,9 +29,11 @@ function appendMessage(text, isUser = false, isError = false) {
     
     const avatarDiv = document.createElement('div');
     avatarDiv.className = 'avatar';
-    avatarDiv.innerText = isUser ? 'YOU' : 'H';
-    if (!isUser) {
-        avatarDiv.classList.add('hyde-avatar');
+    
+    if (isUser) {
+        avatarDiv.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>';
+    } else {
+        avatarDiv.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
     }
     
     const bubbleDiv = document.createElement('div');
@@ -84,8 +86,8 @@ function showTypingIndicator() {
     msgDiv.id = 'typing-indicator';
     
     const avatarDiv = document.createElement('div');
-    avatarDiv.className = 'avatar hyde-avatar';
-    avatarDiv.innerText = 'H';
+    avatarDiv.className = 'avatar';
+    avatarDiv.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
     
     const bubbleDiv = document.createElement('div');
     bubbleDiv.className = 'bubble typing-bubble';
@@ -142,7 +144,6 @@ modeChatBtn.addEventListener('click', () => {
     if (isRecording) {
         isRecording = false;
         micBtn.classList.remove('recording');
-        micBtn.innerHTML = '🎙️';
         voiceCenter.classList.remove('listening');
     }
 });
@@ -229,7 +230,6 @@ listen('voice-state', (event) => {
     if (state === 'READY') {
         isRecording = true;
         micBtn.classList.add('recording');
-        micBtn.innerHTML = '🔴';
         voiceCenter.classList.add('listening');
         if (currentMode === 'voice') voiceStatus.innerText = "Listening... Speak now.";
     } else if (state === 'SPEAKING') {
@@ -237,13 +237,11 @@ listen('voice-state', (event) => {
     } else if (state === 'TIMEOUT' || state === 'IDLE') {
         isRecording = false;
         micBtn.classList.remove('recording');
-        micBtn.innerHTML = '🎙️';
         voiceCenter.classList.remove('listening');
         if (currentMode === 'voice') voiceStatus.innerText = "Listening in background... Say 'Hyde'";
     } else if (state === 'ERROR') {
         isRecording = false;
         micBtn.classList.remove('recording');
-        micBtn.innerHTML = '🎙️';
         voiceCenter.classList.remove('listening');
         if (currentMode === 'voice') voiceStatus.innerText = "Error recognizing speech.";
     } else if (state === 'SUCCESS') {
@@ -266,4 +264,15 @@ listen('voice-state', (event) => {
 // Listen for background events (like timer toast)
 listen('show-toast', (event) => {
     appendMessage(`🔔 ${event.payload.message}`, false, event.payload.is_error);
+});
+
+// Handle AI commands directly from voice loop
+listen('voice-execute', (event) => {
+    const text = event.payload;
+    if (text) {
+        handleCommand(text);
+        if (currentMode === 'voice') {
+            voiceStatus.innerText = "Executing AI Command...";
+        }
+    }
 });
