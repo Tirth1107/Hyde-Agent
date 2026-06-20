@@ -3,18 +3,54 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActionType {
+    // App Operations
     OpenApp,
+    CloseApp,
+    
+    // Website & URL
     OpenUrl,
+    
+    // Search
     WebSearch,
     YoutubeSearch,
+    GithubSearch,
+    RedditSearch,
+    MailSearch,
+    
+    // File Operations
     OpenFile,
     OpenFolder,
-    MailSearch,
+    CreateFolder,
+    
+    // System Controls
     SystemControl,
+    
+    // Clipboard
     Clipboard,
+    
+    // Timer & Reminders
     Timer,
+    Reminder,
+    CancelTimer,
+    ListTimers,
+    
+    // System Info
     Info,
+    
+    // Media Controls
+    MediaControl,
+    
+    // AI Intents
+    AiChat,
+    AiWrite,
+    AiExplain,
+    AiSummarize,
+    AiResearch,
+    
+    // Custom
     CustomRunCommand,
+    
+    // Conversational
     SmallTalk,
 }
 

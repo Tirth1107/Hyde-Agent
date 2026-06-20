@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::process::Command;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
-use urlencoding::encode;
 
 pub fn launch(params: &HashMap<String, String>) -> Result<String, String> {
     let app_name = params.get("app_name").ok_or("No app name provided")?;
@@ -43,11 +42,6 @@ pub fn launch(params: &HashMap<String, String>) -> Result<String, String> {
         }
     }
 
-    // 3. Graceful Fallback: Web Search instead of error
-    let query = encode(app_name);
-    let search_url = format!("https://www.google.com/search?q={}", query);
-    match open::that(&search_url) {
-        Ok(_) => Ok(format!("I couldn't find '{}' locally, so I searched the web for it.", app_name)),
-        Err(_) => Ok(format!("Sorry, I couldn't find '{}' or open the web browser.", app_name))
-    }
+    // 3. App not found — return clear error (no silent web search!)
+    Ok(format!("I couldn't find '{}' installed on this system, Sir. Try installing it or check the app name.", app_name))
 }

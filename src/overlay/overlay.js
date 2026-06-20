@@ -17,7 +17,6 @@ closeBtn.addEventListener('click', () => {
 });
 
 settingsBtn.addEventListener('click', () => {
-    // Open settings window from rust
     invoke('execute_command', { command: 'settings' }).catch(err => {
         console.error(err);
         appendMessage("Could not open settings.", false, true);
@@ -30,13 +29,22 @@ function appendMessage(text, isUser = false, isError = false) {
     
     const avatarDiv = document.createElement('div');
     avatarDiv.className = 'avatar';
-    avatarDiv.innerText = isUser ? 'YOU' : 'AI';
+    avatarDiv.innerText = isUser ? 'YOU' : 'H';
+    if (!isUser) {
+        avatarDiv.classList.add('hyde-avatar');
+    }
     
     const bubbleDiv = document.createElement('div');
     bubbleDiv.className = 'bubble';
-    bubbleDiv.innerText = text;
     
-    if (isError) bubbleDiv.style.color = '#fb7185';
+    // Support basic markdown-like formatting for AI responses
+    if (!isUser && text) {
+        bubbleDiv.innerHTML = formatResponse(text);
+    } else {
+        bubbleDiv.innerText = text || '';
+    }
+    
+    if (isError) bubbleDiv.classList.add('error-bubble');
     
     msgDiv.appendChild(avatarDiv);
     msgDiv.appendChild(bubbleDiv);
@@ -45,15 +53,69 @@ function appendMessage(text, isUser = false, isError = false) {
     chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
+function formatResponse(text) {
+    // Simple markdown-like formatting
+    let html = escapeHtml(text);
+    
+    // Bold **text**
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Inline code `text`
+    html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+    // Line breaks
+    html = html.replace(/\n/g, '<br>');
+    // Emoji indicators for action types
+    html = html.replace(/^(✅|⏰|🔊|🔇|🔒|💤|⚡|🖥️|📁|📋|🤖|🔍|🎵)/gm, '<span class="action-icon">$1</span>');
+    
+    return html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showTypingIndicator() {
+    const existing = document.getElementById('typing-indicator');
+    if (existing) return;
+    
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'message system-msg';
+    msgDiv.id = 'typing-indicator';
+    
+    const avatarDiv = document.createElement('div');
+    avatarDiv.className = 'avatar hyde-avatar';
+    avatarDiv.innerText = 'H';
+    
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.className = 'bubble typing-bubble';
+    bubbleDiv.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+    
+    msgDiv.appendChild(avatarDiv);
+    msgDiv.appendChild(bubbleDiv);
+    
+    chatHistory.appendChild(msgDiv);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+function removeTypingIndicator() {
+    const existing = document.getElementById('typing-indicator');
+    if (existing) existing.remove();
+}
+
 async function handleCommand(cmd) {
     if (!cmd.trim()) return;
     appendMessage(cmd, true);
     input.value = '';
     
+    showTypingIndicator();
+    
     try {
         const result = await invoke('execute_command', { command: cmd });
+        removeTypingIndicator();
         appendMessage(result, false);
     } catch (error) {
+        removeTypingIndicator();
         appendMessage(error, false, true);
     }
 }
@@ -148,77 +210,60 @@ input.addEventListener('input', async (e) => {
 
 let isRecording = false;
 
-async function startRecording() {
-    if (isRecording) return;
-    isRecording = true;
-    micBtn.classList.add('recording');
-    micBtn.innerHTML = '🔴';
+function startRecording() {
     if (currentMode === 'voice') {
-        voiceCenter.classList.add('listening');
-        voiceStatus.innerText = "Initializing Microphone...";
-    }
-    
-    try {
-        const text = await invoke('start_native_listening');
-        if (text) {
-            input.value = text;
-            if (currentMode === 'voice') {
-                voiceTranscript.innerText = text;
-            }
-            await handleCommand(text);
-            if (currentMode === 'voice') {
-                setTimeout(() => {
-                    voiceTranscript.innerText = "";
-                }, 3000);
-            }
-        }
-    } catch (err) {
-        console.error("Voice recognition error:", err);
-        if (currentMode === 'voice') {
-            voiceStatus.innerText = err === "TIMEOUT" ? "Timeout: No speech detected." : "Error: Could not recognize speech.";
-        }
-    } finally {
-        isRecording = false;
-        micBtn.classList.remove('recording');
-        micBtn.innerHTML = '🎙️';
-        voiceCenter.classList.remove('listening');
-        if (currentMode === 'voice') {
-            setTimeout(() => {
-                if (!isRecording) voiceStatus.innerText = "Tap to start listening...";
-            }, 1500);
-        }
+        voiceStatus.innerText = "Hyde is always listening. Just say 'Hyde' to wake me!";
+        setTimeout(() => {
+            if (!isRecording) voiceStatus.innerText = "Listening in background... Say 'Hyde'";
+        }, 3000);
     }
 }
 
 micBtn.addEventListener('click', () => {
-    if (!isRecording) {
-        startRecording();
-    }
+    startRecording();
 });
 
 listen('voice-state', (event) => {
-    if (currentMode !== 'voice') return;
     const state = event.payload;
+    
     if (state === 'READY') {
-        voiceStatus.innerText = "Listening... Speak now.";
+        isRecording = true;
+        micBtn.classList.add('recording');
+        micBtn.innerHTML = '🔴';
+        voiceCenter.classList.add('listening');
+        if (currentMode === 'voice') voiceStatus.innerText = "Listening... Speak now.";
     } else if (state === 'SPEAKING') {
-        voiceStatus.innerText = "Speech detected... Processing...";
-    } else if (state === 'TIMEOUT') {
-        voiceStatus.innerText = "Timeout: No speech detected.";
+        if (currentMode === 'voice') voiceStatus.innerText = "Speech detected... Processing...";
+    } else if (state === 'TIMEOUT' || state === 'IDLE') {
         isRecording = false;
         micBtn.classList.remove('recording');
         micBtn.innerHTML = '🎙️';
         voiceCenter.classList.remove('listening');
+        if (currentMode === 'voice') voiceStatus.innerText = "Listening in background... Say 'Hyde'";
     } else if (state === 'ERROR') {
-        voiceStatus.innerText = "Error recognizing speech.";
         isRecording = false;
         micBtn.classList.remove('recording');
         micBtn.innerHTML = '🎙️';
         voiceCenter.classList.remove('listening');
+        if (currentMode === 'voice') voiceStatus.innerText = "Error recognizing speech.";
+    } else if (state === 'SUCCESS') {
+        if (currentMode === 'voice') voiceStatus.innerText = "✅ Command executed.";
+        setTimeout(() => {
+            if (currentMode === 'voice') voiceStatus.innerText = "Listening in background... Say 'Hyde'";
+        }, 2000);
+    } else if (state.startsWith('TEXT:')) {
+        const text = state.replace('TEXT:', '');
+        input.value = text;
+        if (currentMode === 'voice') {
+            voiceTranscript.innerText = text;
+            setTimeout(() => {
+                voiceTranscript.innerText = "";
+            }, 3000);
+        }
     }
 });
 
 // Listen for background events (like timer toast)
 listen('show-toast', (event) => {
-    appendMessage(`🔔 Notification: ${event.payload.message}`, false, event.payload.is_error);
+    appendMessage(`🔔 ${event.payload.message}`, false, event.payload.is_error);
 });

@@ -393,3 +393,76 @@ body, html {
   max-width: 80%;
   min-height: 2em;
 }
+
+/* ─── Hyde Avatar ─── */
+.hyde-avatar {
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color)) !important;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+/* ─── Typing Indicator ─── */
+.typing-bubble {
+  padding: 14px 22px !important;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.typing-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  animation: typing-bounce 1.4s infinite ease-in-out;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ─── Error Bubble ─── */
+.error-bubble {
+  color: #fb7185 !important;
+  border-color: rgba(251, 113, 133, 0.3) !important;
+  background: rgba(251, 113, 133, 0.08) !important;
+}
+
+/* ─── Action Icons ─── */
+.action-icon {
+  font-size: 1.1em;
+  margin-right: 4px;
+}
+
+/* ─── Markdown Formatting in Bubbles ─── */
+.bubble code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 0.88em;
+}
+
+.bubble strong {
+  color: var(--secondary-color);
+  font-weight: 600;
+}
+

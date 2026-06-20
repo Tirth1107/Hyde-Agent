@@ -13,6 +13,7 @@
       <h2>Hyde Agent</h2>
       <nav>
         <a href="#" class="nav-item active" data-target="general">General</a>
+        <a href="#" class="nav-item" data-target="ai">AI Assistant</a>
         <a href="#" class="nav-item" data-target="commands">Built-in Commands</a>
         <a href="#" class="nav-item" data-target="custom">Custom Commands</a>
         <a href="#" class="nav-item" data-target="voice">Voice Settings</a>
@@ -34,6 +35,23 @@
         <div class="setting-group">
           <label>Global Hotkey</label>
           <input type="text" id="hotkey-input" value="Alt+Space" readonly>
+        </div>
+      </section>
+
+      <section id="ai">
+        <h3>AI Assistant</h3>
+        <p class="desc">Configure the Neural Engine's language model.</p>
+        <div class="setting-group">
+          <label>Provider</label>
+          <select disabled>
+            <option>Google Gemini (Free)</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label>Gemini API Key</label>
+          <input type="password" id="gemini-key-input" placeholder="AIzaSy...">
+          <button id="save-key-btn" class="secondary-btn" style="margin-top: 8px;">Save Key</button>
+          <p class="desc" style="margin-top: 8px; font-size: 0.8em;">Get a free API key at <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--primary-color);">Google AI Studio</a>.</p>
         </div>
       </section>
 

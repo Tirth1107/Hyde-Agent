@@ -1,3 +1,15 @@
+//! Hyde Agent — Fast-Path Parser (Rust)
+//!
+//! This module provides a FAST exact-match parser for built-in commands.
+//! It serves as an optimization layer: exact keyword matches are handled
+//! instantly in Rust without IPC latency to the Python engine.
+//!
+//! For anything that isn't an exact match, the input flows to the
+//! Python Neural Engine for NLU classification.
+//!
+//! IMPORTANT: This module does NOT have a web-search fallback.
+//! If nothing matches, it returns None, and the caller routes to Python.
+
 use std::collections::HashMap;
 use strsim::levenshtein;
 use regex::Regex;
@@ -5,8 +17,9 @@ use crate::types::{ActionType, ParseResult};
 use crate::registry::BUILTIN_COMMANDS;
 use crate::custom_commands::get_custom_commands;
 
-pub fn parse_input(input: &str) -> Option<ParseResult> {
-    let normalized = normalize(input);
+/// Try ONLY exact keyword/alias matches. Returns None if no exact match.
+/// This is the fast-path used before IPC to Python.
+pub fn try_exact_match(normalized: &str) -> Option<ParseResult> {
     if normalized.is_empty() {
         return None;
     }
@@ -22,7 +35,7 @@ pub fn parse_input(input: &str) -> Option<ParseResult> {
         }
     }
 
-    // 2. Exact built-in
+    // 2. Exact built-in keyword or alias
     for cmd in BUILTIN_COMMANDS.iter() {
         if cmd.keyword.to_lowercase() == normalized {
             return Some(ParseResult {
@@ -42,7 +55,24 @@ pub fn parse_input(input: &str) -> Option<ParseResult> {
         }
     }
 
-    // 3. Check for URLs or "open " command which could be a URL or App
+    None
+}
+
+/// Full parser with prefix rules, fuzzy matching, etc.
+/// Used as fallback when IPC to Python fails.
+/// NOTE: No longer has a web-search fallback — returns None if nothing matches.
+pub fn parse_input(input: &str) -> Option<ParseResult> {
+    let normalized = normalize(input);
+    if normalized.is_empty() {
+        return None;
+    }
+
+    // 1. Exact match (custom + built-in)
+    if let Some(result) = try_exact_match(&normalized) {
+        return Some(result);
+    }
+
+    // 2. Check for URLs or "open " command which could be a URL or App
     let mut target_str = normalized.clone();
     let has_open_prefix = if let Some(rest) = normalized.strip_prefix("open ") {
         target_str = rest.to_string();
@@ -56,7 +86,9 @@ pub fn parse_input(input: &str) -> Option<ParseResult> {
 
     if target_str.starts_with("http://") || target_str.starts_with("https://") || 
        target_str.ends_with(".com") || target_str.ends_with(".org") || 
-       target_str.ends_with(".net") || target_str.ends_with(".io") {
+       target_str.ends_with(".net") || target_str.ends_with(".io") ||
+       target_str.ends_with(".dev") || target_str.ends_with(".app") ||
+       target_str.ends_with(".ai") || target_str.ends_with(".co") {
         return Some(ParseResult {
             action_type: ActionType::OpenUrl,
             parameters: HashMap::from([("url".to_string(), target_str)]),
@@ -93,12 +125,12 @@ pub fn parse_input(input: &str) -> Option<ParseResult> {
         });
     }
 
-    // 4. Prefix Rules
+    // 3. Prefix Rules
     if let Some(res) = check_prefixes(&normalized) {
         return Some(res);
     }
 
-    // 5. Fuzzy built-in
+    // 4. Fuzzy built-in
     for cmd in BUILTIN_COMMANDS.iter() {
         let dist = levenshtein(&cmd.keyword.to_lowercase(), &normalized);
         if dist <= 2 && cmd.keyword.len() > 3 {
@@ -110,12 +142,9 @@ pub fn parse_input(input: &str) -> Option<ParseResult> {
         }
     }
 
-    // Global Fallback
-    Some(ParseResult {
-        action_type: ActionType::WebSearch,
-        parameters: HashMap::from([("query".to_string(), input.to_string())]),
-        confidence: 0.1,
-    })
+    // NO web-search fallback!
+    // Return None so the caller knows to route through Python NLU.
+    None
 }
 
 fn check_prefixes(n: &str) -> Option<ParseResult> {
@@ -164,7 +193,7 @@ fn check_prefixes(n: &str) -> Option<ParseResult> {
         });
     }
 
-    // Advanced NLU Regex Intent matching for Mail
+    // Mail regex patterns
     let mail_from_re = Regex::new(r"^(?:find|search|show)(?: me)?(?: the)? (?:mail|mails|email|emails) (?:from|by) (.+)").unwrap();
     if let Some(caps) = mail_from_re.captures(n) {
         let sender = caps.get(1).unwrap().as_str();
@@ -177,7 +206,6 @@ fn check_prefixes(n: &str) -> Option<ParseResult> {
 
     let mail_about_re = Regex::new(r"^(?:find|search|show)(?: me)?(?: the)? (?:(?:mail|mails|email|emails) (?:about|for|regarding|of|with) (.+)|(.+) (?:in|on) (?:mail|mails|email|emails))").unwrap();
     if let Some(caps) = mail_about_re.captures(n) {
-        // The topic can be in capture group 1 or 2
         let topic = caps.get(1).or_else(|| caps.get(2)).unwrap().as_str();
         return Some(ParseResult {
             action_type: ActionType::MailSearch,
@@ -255,7 +283,12 @@ fn normalize(input: &str) -> String {
     cleaned = cleaned.replace(".", "").replace(",", "").replace("!", "").replace("?", "");
     
     // NLU filler word stripping
-    let fillers = ["can you please ", "could you ", "would you ", "please ", "i want to ", "let's ", "can you ", "hey hyde "];
+    let fillers = [
+        "can you please ", "could you please ", "would you please ",
+        "could you ", "would you ", "please ", "i want to ", "i'd like to ",
+        "i need you to ", "i need to ", "let's ", "can you ", "hey hyde ",
+        "hi hyde ", "okay hyde ", "go ahead and ", "just ", "kindly ",
+    ];
     let mut lower = cleaned.trim().to_lowercase();
     for f in fillers.iter() {
         if lower.starts_with(f) {

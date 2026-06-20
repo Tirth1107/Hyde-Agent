@@ -82,7 +82,135 @@ pub fn control(params: &HashMap<String, String>) -> Result<String, String> {
             }
         }
         "screenshot" => {
-            Err("Screenshot not implemented yet".to_string())
+            #[cfg(target_os = "windows")]
+            {
+                // Use PowerShell to simulate Win+PrintScreen (saves to Pictures\Screenshots)
+                let ps_cmd = r#"
+                    Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Keyboard { [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo); }';
+                    [Keyboard]::keybd_event(0x5B, 0, 0, 0);
+                    [Keyboard]::keybd_event(0x2C, 0, 0, 0);
+                    Start-Sleep -Milliseconds 100;
+                    [Keyboard]::keybd_event(0x2C, 0, 2, 0);
+                    [Keyboard]::keybd_event(0x5B, 0, 2, 0);
+                "#;
+                let mut cmd = Command::new("powershell");
+                cmd.args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd]);
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd.creation_flags(0x08000000);
+                }
+                cmd.spawn()
+                    .map_err(|e| format!("Failed to take screenshot: {}", e))?;
+                Ok("Screenshot taken and saved to Pictures\\Screenshots".to_string())
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Err("Screenshot not implemented for this OS".to_string())
+            }
+        }
+        "brightness up" => {
+            #[cfg(target_os = "windows")]
+            {
+                let ps_cmd = r#"
+                    $brightness = (Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness;
+                    $new = [Math]::Min(100, $brightness + 10);
+                    (Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods).WmiSetBrightness(1, $new)
+                "#;
+                let mut cmd = Command::new("powershell");
+                cmd.args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd]);
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd.creation_flags(0x08000000);
+                }
+                match cmd.output() {
+                    Ok(_) => Ok("Increased brightness".to_string()),
+                    Err(e) => Err(format!("Failed to adjust brightness: {}", e)),
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Err("Brightness control not implemented for this OS".to_string())
+            }
+        }
+        "brightness down" => {
+            #[cfg(target_os = "windows")]
+            {
+                let ps_cmd = r#"
+                    $brightness = (Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness;
+                    $new = [Math]::Max(0, $brightness - 10);
+                    (Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods).WmiSetBrightness(1, $new)
+                "#;
+                let mut cmd = Command::new("powershell");
+                cmd.args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd]);
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd.creation_flags(0x08000000);
+                }
+                match cmd.output() {
+                    Ok(_) => Ok("Decreased brightness".to_string()),
+                    Err(e) => Err(format!("Failed to adjust brightness: {}", e)),
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Err("Brightness control not implemented for this OS".to_string())
+            }
+        }
+        "empty trash" => {
+            #[cfg(target_os = "windows")]
+            {
+                let mut cmd = Command::new("powershell");
+                cmd.args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command",
+                    "Clear-RecycleBin -Force -ErrorAction SilentlyContinue"]);
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd.creation_flags(0x08000000);
+                }
+                match cmd.output() {
+                    Ok(_) => Ok("Recycle bin emptied".to_string()),
+                    Err(e) => Err(format!("Failed to empty recycle bin: {}", e)),
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Err("Empty trash not implemented for this OS".to_string())
+            }
+        }
+        "set_volume" => {
+            let value = params.get("value").ok_or("No volume value provided")?;
+            #[cfg(target_os = "windows")]
+            {
+                let ps_cmd = format!(
+                    r#"
+                    $vol = {};
+                    $wshShell = New-Object -ComObject WScript.Shell;
+                    # Reset to 0 then set to desired level
+                    for ($i = 0; $i -lt 50; $i++) {{ $wshShell.SendKeys([char]174) }};
+                    $steps = [Math]::Floor($vol / 2);
+                    for ($i = 0; $i -lt $steps; $i++) {{ $wshShell.SendKeys([char]175) }};
+                    "#,
+                    value
+                );
+                let mut cmd = Command::new("powershell");
+                cmd.args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps_cmd]);
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd.creation_flags(0x08000000);
+                }
+                match cmd.output() {
+                    Ok(_) => Ok(format!("Volume set to {}%", value)),
+                    Err(e) => Err(format!("Failed to set volume: {}", e)),
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Err("Volume control not implemented for this OS".to_string())
+            }
         }
         _ => Err(format!("Unknown system control: {}", action))
     }

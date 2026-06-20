@@ -1,8 +1,5 @@
 const { invoke } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
-import { pipeline, env } from '../overlay/transformers.min.js';
-env.allowLocalModels = false;
-env.useBrowserCache = true;
 
 // Navigation
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -26,33 +23,48 @@ document.getElementById('open-logs-btn').addEventListener('click', async () => {
   }
 });
 
+// Voice is now handled by the Python Hyde Engine (Vosk wake word + Faster-Whisper STT)
+// No browser-side model download needed
 const downloadBtn = document.getElementById('download-vosk-btn');
-const statusText = document.getElementById('vosk-status-text');
-
 if (downloadBtn) {
-  downloadBtn.addEventListener('click', async () => {
-    try {
-      downloadBtn.disabled = true;
-      downloadBtn.innerText = "Downloading Model... (Please wait)";
-      statusText.style.display = 'block';
-      statusText.style.color = '#eab308';
-      statusText.innerText = "Downloading Whisper Model (~40MB)... This may take a few seconds depending on your internet connection.";
-      
-      // Load and cache the whisper model in IndexedDB
-      await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
-      
-      statusText.style.color = '#4ade80';
-      statusText.innerText = "Whisper Model Downloaded successfully! Voice commands are now available offline.";
-      downloadBtn.innerText = "Model Downloaded ✅";
-    } catch (err) {
-      statusText.style.display = 'block';
-      statusText.style.color = '#ef4444';
-      statusText.innerText = "Error downloading model: " + err;
-      downloadBtn.disabled = false;
-      downloadBtn.innerText = "Retry Download";
-    }
-  });
+  downloadBtn.innerText = "Voice Engine Active ✅";
+  downloadBtn.disabled = true;
+  const statusText = document.getElementById('vosk-status-text');
+  if (statusText) {
+    statusText.style.display = 'block';
+    statusText.style.color = '#4ade80';
+    statusText.innerText = "Voice recognition is handled natively by the Hyde Neural Engine (Vosk + Faster-Whisper). No additional setup needed.";
+  }
 }
+
+// Load API Key
+async function loadApiKey() {
+  try {
+    const key = await invoke('get_gemini_api_key');
+    if (key) {
+      document.getElementById('gemini-key-input').value = key;
+    }
+  } catch (err) {
+    console.error("Failed to load API key", err);
+  }
+}
+
+document.getElementById('save-key-btn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('save-key-btn');
+  const input = document.getElementById('gemini-key-input');
+  try {
+    btn.innerText = "Saving...";
+    await invoke('save_gemini_api_key', { key: input.value });
+    btn.innerText = "Saved!";
+    setTimeout(() => btn.innerText = "Save Key", 2000);
+  } catch (err) {
+    console.error("Failed to save API key", err);
+    btn.innerText = "Error";
+    setTimeout(() => btn.innerText = "Save Key", 2000);
+  }
+});
+
+loadApiKey();
 
 // Load Custom Commands
 async function loadCustomCommands() {
